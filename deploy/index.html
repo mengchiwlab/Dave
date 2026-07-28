@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 AH股IPO评分系统 V5.9</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { color: #aaa; font-size: 14px; }
+        .content { padding: 30px; }
+        .note {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .input-group.full { grid-template-columns: 1fr; }
+        .field {
+            display: flex;
+            flex-direction: column;
+        }
+        .field label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        .field input, .field select {
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .field input:focus, .field select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .field input[readonly] {
+            background: #f5f5f5;
+            color: #666;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102,126,234,0.4); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        .spinner {
+            display: inline-block;
+            width: 24px; height: 24px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .result { margin-top: 25px; display: none; }
+        .score-box {
+            color: white;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .score-box.grade-a { background: linear-gradient(135deg, #00c853, #64dd17); }
+        .score-box.grade-bp { background: linear-gradient(135deg, #64dd17, #aeea00); }
+        .score-box.grade-b { background: linear-gradient(135deg, #ffab00, #ffd600); }
+        .score-box.grade-c { background: linear-gradient(135deg, #ff6d00, #ff9100); }
+        .score-box.grade-d { background: linear-gradient(135deg, #dd2c00, #ff3d00); }
+        .score-num { font-size: 72px; font-weight: 800; line-height: 1; }
+        .score-grade { font-size: 32px; font-weight: 700; margin-top: 5px; }
+        .score-advice { font-size: 18px; margin-top: 8px; opacity: 0.95; }
+        .stock-name { font-size: 14px; opacity: 0.8; margin-bottom: 10px; }
+        .factors-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .factors-table th {
+            background: #f5f5f5;
+            padding: 12px; text-align: left;
+            font-size: 13px; color: #666; font-weight: 600;
+        }
+        .factors-table td { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+        .factors-table tr:hover { background: #fafafa; }
+        .progress-bar {
+            background: #e0e0e0; border-radius: 4px; height: 18px;
+            overflow: hidden; min-width: 120px;
+        }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .score-cell { font-weight: 700; text-align: center; }
+        .market-info {
+            background: #f8f9fa; border-radius: 10px;
+            padding: 15px; margin-bottom: 20px;
+            font-size: 13px; color: #666;
+        }
+        .error {
+            background: #ffebee; color: #c62828;
+            padding: 12px; border-radius: 8px;
+            margin-top: 10px; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 AH股IPO评分系统 V5.9</h1>
+            <p>基于50只历史AH股IPO回测优化 | 云端自动计算Beta/Alpha</p>
+        </div>
+        <div class="content">
+            <div class="note">
+                💡 <strong>使用说明：</strong>输入A股6位代码，点击「获取数据」通过云端Worker自动计算Beta/Alpha/45日涨幅/价格位置。
+                然后输入AH折价率、基石占比等参数，点击「评分」。
+            </div>
+
+            <!-- ========== 配置Worker地址 ========== -->
+            <div class="input-group full" style="margin-bottom:10px;">
+                <div class="field">
+                    <label>☁️ Worker地址（部署后填写）</label>
+                    <input type="text" id="workerUrl" placeholder="https://你的用户名.workers.dev" value="">
+                </div>
+            </div>
+
+            <div class="input-group full">
+                <div class="field">
+                    <label>A股代码 (6位数字)</label>
+                    <input type="text" id="code" placeholder="例如: 300308" maxlength="6">
+                </div>
+            </div>
+            <button class="btn" id="fetchBtn" onclick="fetchData()">📡 获取A股数据</button>
+
+            <div id="loading" class="loading" style="display:none;">
+                <div class="spinner"></div> 正在云端计算 Beta/Alpha/45日涨幅...
+            </div>
+            <div id="error"></div>
+
+            <div id="marketInfo" class="market-info" style="display:none;"></div>
+
+            <div class="input-group" id="manualInputs" style="display:none;">
+                <div class="field">
+                    <label>AH折价率 (%)</label>
+                    <input type="number" id="discount" value="30" step="1">
+                </div>
+                <div class="field">
+                    <label>基石占比 (%)</label>
+                    <input type="number" id="cs" value="40" step="1">
+                </div>
+                <div class="field">
+                    <label>保荐人</label>
+                    <select id="sp">
+                        <option value="3">高盛</option>
+                        <option value="3">摩根士丹利</option>
+                        <option value="3" selected>中金</option>
+                        <option value="3">中信证券</option>
+                        <option value="2">华泰</option>
+                        <option value="2">海通</option>
+                        <option value="1.5">中信建投</option>
+                        <option value="1.5">国泰君安</option>
+                        <option value="1">招银</option>
+                        <option value="1">农银</option>
+                        <option value="1">其他中资</option>
+                        <option value="0.5">小型券商</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>行业</label>
+                    <select id="ind">
+                        <option value="5" selected>半导体/芯片/AI</option>
+                        <option value="4">新能源/光伏/储能</option>
+                        <option value="4">云计算/软件/通信</option>
+                        <option value="4">机器人/精密制造</option>
+                        <option value="4">创新药/医疗器械</option>
+                        <option value="3">新材料/军工</option>
+                        <option value="2">食品饮料/消费</option>
+                        <option value="2">医药</option>
+                        <option value="1">银行/保险/地产</option>
+                        <option value="1">化工/钢铁/纺织</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Beta (云端计算)</label>
+                    <input type="number" id="beta" step="0.01" readonly>
+                </div>
+                <div class="field">
+                    <label>Alpha (云端计算)</label>
+                    <input type="number" id="alpha" step="0.01" readonly>
+                </div>
+                <div class="field">
+                    <label>A股45日涨幅% (云端计算)</label>
+                    <input type="number" id="ret45" step="0.01" readonly>
+                </div>
+                <div class="field">
+                    <label>价格位置 (云端计算)</label>
+                    <input type="number" id="pos" step="0.0001" readonly>
+                </div>
+            </div>
+
+            <button class="btn" id="scoreBtn" onclick="doScore()" style="display:none;">🚀 开始评分</button>
+
+            <div id="result" class="result">
+                <div id="scoreBox" class="score-box">
+                    <div class="stock-name" id="resName"></div>
+                    <div class="score-num" id="resScore">0</div>
+                    <div class="score-grade" id="resGrade">-</div>
+                    <div class="score-advice" id="resAdvice">-</div>
+                </div>
+                <table class="factors-table">
+                    <thead><tr><th>因子</th><th style="width:35%">得分率</th><th style="text-align:center">分数</th><th>详情</th></tr></thead>
+                    <tbody id="factorsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+let stockData = {};
+
+// ========== 配置：修改这里为你的Worker地址 ==========
+// 部署后把下面的空字符串改成你的Worker地址
+// 例如: "https://ah-ipo-data.yourname.workers.dev"
+const DEFAULT_WORKER_URL = "";
+
+async function fetchData() {
+    const code = document.getElementById('code').value.trim();
+    if (!/^\d{6}$/.test(code)) {
+        showError('请输入6位数字的股票代码');
+        return;
+    }
+
+    let workerUrl = document.getElementById('workerUrl').value.trim();
+    if (!workerUrl) {
+        workerUrl = DEFAULT_WORKER_URL;
+    }
+    if (!workerUrl) {
+        showError('请先填写Cloudflare Worker地址（见部署说明）');
+        return;
+    }
+
+    document.getElementById('fetchBtn').disabled = true;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('error').innerHTML = '';
+
+    try {
+        const res = await fetch(`${workerUrl}?code=${code}`);
+        const data = await res.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        stockData = data;
+
+        // 填充表单
+        document.getElementById('beta').value = data.beta.toFixed(2);
+        document.getElementById('alpha').value = data.alpha.toFixed(2);
+        document.getElementById('ret45').value = data.ret45.toFixed(2);
+        document.getElementById('pos').value = data.pos.toFixed(4);
+
+        // 显示市场信息
+        const capStr = data.cap ? `${data.cap.toFixed(0)}亿` : 'N/A';
+        const info = `📈 ${data.name} (${data.code}) | Alpha=${(data.alpha*100).toFixed(1)}% | Beta=${data.beta.toFixed(2)} | 45日=${data.ret45.toFixed(1)}% | 位置=${(data.pos*100).toFixed(0)}% | 市值=${capStr}`;
+        document.getElementById('marketInfo').innerHTML = info;
+        document.getElementById('marketInfo').style.display = 'block';
+
+        // 显示手动输入区
+        document.getElementById('manualInputs').style.display = 'grid';
+        document.getElementById('scoreBtn').style.display = 'block';
+
+    } catch (e) {
+        showError('获取数据失败: ' + e.message);
+    } finally {
+        document.getElementById('fetchBtn').disabled = false;
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+function doScore() {
+    if (!stockData.code) {
+        showError('请先获取数据');
+        return;
+    }
+
+    const r = stockData.ret45;
+    const b = stockData.beta;
+    const p = stockData.pos;
+    const a = stockData.alpha;
+    const disc = parseFloat(document.getElementById('discount').value) || 0;
+    const cs = parseFloat(document.getElementById('cs').value) || 0;
+    const sp = parseFloat(document.getElementById('sp').value) || 1;
+    const ind = parseFloat(document.getElementById('ind').value) || 2;
+    const cap = stockData.cap || 0;
+
+    const s_ret = r > 15 ? 17 : r > 5 ? 14 : r > -5 ? 10 : r > -15 ? 6 : 3;
+    const s_beta = b > 2 ? 21 : b > 1.5 ? 16 : b > 1 ? 11 : b > 0.5 ? 6 : 3;
+    const s_cs = cs > 50 ? 15 : cs > 40 ? 12 : cs > 30 ? 8 : 4;
+    const s_pos = p > 0.8 ? 10 : p > 0.6 ? 8 : p > 0.4 ? 6 : p > 0.2 ? 3 : 1;
+    const s_alpha = a > 1 ? 2 : a > 0.5 ? 1.5 : a > 0 ? 1 : a > -0.5 ? 0.5 : 0;
+    const s_disc = disc > 50 ? 9 : disc > 40 ? 7 : disc > 30 ? 5 : disc > 20 ? 2 : 1;
+    const s_ind = ind * 3.4;
+    const s_cap = cap < 200 ? 4 : cap < 1000 ? 3 : cap < 5000 ? 2 : 1;
+    const s_sp = sp * 1.67;
+
+    const total = s_ret + s_beta + s_cs + s_pos + s_alpha + s_disc + s_ind + s_cap + s_sp;
+
+    let grade, advice, boxClass;
+    if (total >= 80) { grade = 'A'; advice = '强烈推荐参与'; boxClass = 'grade-a'; }
+    else if (total >= 65) { grade = 'B+'; advice = '推荐参与'; boxClass = 'grade-bp'; }
+    else if (total >= 50) { grade = 'B'; advice = '中性偏积极'; boxClass = 'grade-b'; }
+    else if (total >= 40) { grade = 'C'; advice = '观望'; boxClass = 'grade-c'; }
+    else { grade = 'D'; advice = '建议回避'; boxClass = 'grade-d'; }
+
+    const factors = [
+        { name: 'A股涨跌幅', score: s_ret, max: 17, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
+        { name: 'Beta(波动)', score: s_beta, max: 21, detail: `β=${b.toFixed(2)}`, color: b > 2 ? '#dd2c00' : '#64dd17' },
+        { name: '基石占比', score: s_cs, max: 15, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
+        { name: '价格位置', score: s_pos, max: 10, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
+        { name: 'Alpha', score: s_alpha, max: 2, detail: `α=${(a*100).toFixed(1)}%`, color: '#00c853' },
+        { name: 'AH折价率', score: s_disc, max: 9, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
+        { name: '行业', score: s_ind, max: 17, detail: '', color: '#00c853' },
+        { name: '市值规模', score: s_cap, max: 4, detail: `${cap.toFixed(0)}亿`, color: '#64dd17' },
+        { name: '保荐人', score: s_sp, max: 5, detail: '', color: '#64dd17' },
+    ];
+
+    document.getElementById('resName').textContent = `${stockData.name} (${stockData.code})`;
+    document.getElementById('resScore').textContent = total.toFixed(1);
+    document.getElementById('resGrade').textContent = `等级 ${grade}`;
+    document.getElementById('resAdvice').textContent = advice;
+
+    const box = document.getElementById('scoreBox');
+    box.className = 'score-box ' + boxClass;
+
+    const tbody = document.getElementById('factorsBody');
+    tbody.innerHTML = factors.map(f => {
+        const pct = (f.score / f.max * 100).toFixed(0);
+        return `<tr><td>${f.name}</td><td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${f.color}"></div></div></td><td class="score-cell">${f.score.toFixed(1)}/${f.max}</td><td style="color:#888;font-size:12px">${f.detail}</td></tr>`;
+    }).join('');
+
+    document.getElementById('result').style.display = 'block';
+}
+
+function showError(msg) {
+    document.getElementById('error').innerHTML = `<div class="error">${msg}</div>`;
+}
+</script>
+</body>
+</html>

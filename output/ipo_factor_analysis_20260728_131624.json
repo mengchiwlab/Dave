@@ -1,0 +1,185 @@
+{
+  "timestamp": "2026-07-28T13:16:24.650980",
+  "sample_size": 30,
+  "target_return": "return_7d",
+  "ic_analysis": [
+    {
+      "factor": "ret45",
+      "name": "A股45日涨幅",
+      "ic": 0.543047830923248,
+      "ic_abs": 0.543047830923248,
+      "p_value": 0.05,
+      "ic_std": 0.3971960074917004,
+      "ir": 1.3672002071531097,
+      "significant": true
+    },
+    {
+      "factor": "cap",
+      "name": "市值",
+      "ic": 0.467853170189099,
+      "ic_abs": 0.467853170189099,
+      "p_value": 0.05,
+      "ic_std": 0.43402409295487976,
+      "ir": 1.0779403720736855,
+      "significant": true
+    },
+    {
+      "factor": "discount",
+      "name": "AH折价率",
+      "ic": 0.37975528364849837,
+      "ic_abs": 0.37975528364849837,
+      "p_value": 0.05,
+      "ic_std": 0.262445329583912,
+      "ir": 1.446982643081999,
+      "significant": true
+    },
+    {
+      "factor": "ind",
+      "name": "行业得分",
+      "ic": 0.2895856653239291,
+      "ic_abs": 0.2895856653239291,
+      "p_value": 0.05,
+      "ic_std": 0.24271418365185546,
+      "ir": 1.1931089805213977,
+      "significant": true
+    },
+    {
+      "factor": "alpha",
+      "name": "Alpha",
+      "ic": 0.15194660734149057,
+      "ic_abs": 0.15194660734149057,
+      "p_value": 0.05,
+      "ic_std": 0.30501233665247723,
+      "ir": 0.49816381476661087,
+      "significant": true
+    },
+    {
+      "factor": "pos",
+      "name": "价格位置",
+      "ic": 0.12747497219132373,
+      "ic_abs": 0.12747497219132373,
+      "p_value": 0.05,
+      "ic_std": 0.13415160001175644,
+      "ir": 0.9502236421817578,
+      "significant": true
+    },
+    {
+      "factor": "beta",
+      "name": "Beta波动",
+      "ic": -0.026473859844271416,
+      "ic_abs": 0.026473859844271416,
+      "p_value": 0.05,
+      "ic_std": 0.4453558540478545,
+      "ir": 0.059444150468663824,
+      "significant": true
+    },
+    {
+      "factor": "sp",
+      "name": "保荐人得分",
+      "ic": 0.006172300917755523,
+      "ic_abs": 0.006172300917755523,
+      "p_value": 0.05,
+      "ic_std": 0.3976743617272718,
+      "ir": 0.015520953802485067,
+      "significant": true
+    },
+    {
+      "factor": "cs",
+      "name": "基石占比",
+      "ic": 0.006006674082313683,
+      "ic_abs": 0.006006674082313683,
+      "p_value": 0.05,
+      "ic_std": 0.44203192123166296,
+      "ir": 0.013588748244309327,
+      "significant": true
+    }
+  ],
+  "correlation_warnings": [],
+  "weight_suggestions": [
+    {
+      "factor": "ret45",
+      "name": "A股45日涨幅",
+      "current": 20,
+      "ic_weight": 27.175268169786026,
+      "ir_weight": 20.64579257270913,
+      "ic": 0.543047830923248,
+      "suggestion": "⬆️ 建议上调"
+    },
+    {
+      "factor": "beta",
+      "name": "Beta波动",
+      "current": 15,
+      "ic_weight": 1.3248082393300031,
+      "ir_weight": 0.8976531701911188,
+      "ic": 0.026473859844271416,
+      "suggestion": "⬇️ 建议下调"
+    },
+    {
+      "factor": "cs",
+      "name": "基石占比",
+      "current": 15,
+      "ic_weight": 0.30058674337739566,
+      "ir_weight": 0.20520072781363868,
+      "ic": 0.006006674082313683,
+      "suggestion": "⬇️ 建议下调"
+    },
+    {
+      "factor": "pos",
+      "name": "价格位置",
+      "current": 12,
+      "ic_weight": 6.379118665009176,
+      "ir_weight": 14.349120276260871,
+      "ic": 0.12747497219132373,
+      "suggestion": "✅ 合理"
+    },
+    {
+      "factor": "alpha",
+      "name": "Alpha",
+      "current": 12,
+      "ic_weight": 7.603731323213379,
+      "ir_weight": 7.522663274252377,
+      "ic": 0.15194660734149057,
+      "suggestion": "✅ 合理"
+    },
+    {
+      "factor": "discount",
+      "name": "AH折价率",
+      "current": 12,
+      "ic_weight": 19.00376188685979,
+      "ir_weight": 21.850569762264396,
+      "ic": 0.37975528364849837,
+      "suggestion": "⬆️ 建议上调"
+    },
+    {
+      "factor": "ind",
+      "name": "行业得分",
+      "current": 8,
+      "ic_weight": 14.49148245362558,
+      "ir_weight": 18.016878873777607,
+      "ic": 0.2895856653239291,
+      "suggestion": "⬆️ 建议上调"
+    },
+    {
+      "factor": "cap",
+      "name": "市值",
+      "current": 4,
+      "ic_weight": 23.412367456394925,
+      "ir_weight": 16.277742799588335,
+      "ic": 0.467853170189099,
+      "suggestion": "⬆️ 建议上调"
+    },
+    {
+      "factor": "sp",
+      "name": "保荐人得分",
+      "current": 3,
+      "ic_weight": 0.3088750624037195,
+      "ir_weight": 0.23437854314252748,
+      "ic": 0.006172300917755523,
+      "suggestion": "❌ 可考虑剔除"
+    }
+  ],
+  "score_comparison": {
+    "ic_current": 0.637061868256579,
+    "ic_optimized": 0.5959955506117909
+  }
+}
