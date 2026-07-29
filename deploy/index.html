@@ -147,20 +147,12 @@
     <div class="container">
         <div class="header">
             <h1>📊 AH股IPO评分系统 V5.9</h1>
-            <p>基于50只历史AH股IPO回测优化 | 云端自动计算Beta/Alpha</p>
+            <p>基于50只历史AH股IPO回测优化 | 纯前端自动计算Beta/Alpha</p>
         </div>
         <div class="content">
             <div class="note">
-                💡 <strong>使用说明：</strong>输入A股6位代码，点击「获取数据」通过云端Worker自动计算Beta/Alpha/45日涨幅/价格位置。
+                💡 输入A股6位代码，点击「获取数据」自动拉取K线并计算Beta/Alpha/45日涨幅/价格位置。
                 然后输入AH折价率、基石占比等参数，点击「评分」。
-            </div>
-
-            <!-- ========== 配置Worker地址 ========== -->
-            <div class="input-group full" style="margin-bottom:10px;">
-                <div class="field">
-                    <label>☁️ Worker地址（部署后填写）</label>
-                    <input type="text" id="workerUrl" placeholder="https://你的用户名.workers.dev" value="">
-                </div>
             </div>
 
             <div class="input-group full">
@@ -172,40 +164,26 @@
             <button class="btn" id="fetchBtn" onclick="fetchData()">📡 获取A股数据</button>
 
             <div id="loading" class="loading" style="display:none;">
-                <div class="spinner"></div> 正在云端计算 Beta/Alpha/45日涨幅...
+                <div class="spinner"></div> 正在获取K线数据并计算指标...
             </div>
             <div id="error"></div>
 
             <div id="marketInfo" class="market-info" style="display:none;"></div>
 
             <div class="input-group" id="manualInputs" style="display:none;">
-                <div class="field">
-                    <label>AH折价率 (%)</label>
-                    <input type="number" id="discount" value="30" step="1">
-                </div>
-                <div class="field">
-                    <label>基石占比 (%)</label>
-                    <input type="number" id="cs" value="40" step="1">
-                </div>
-                <div class="field">
-                    <label>保荐人</label>
+                <div class="field"><label>AH折价率 (%)</label><input type="number" id="discount" value="30" step="1"></div>
+                <div class="field"><label>基石占比 (%)</label><input type="number" id="cs" value="40" step="1"></div>
+                <div class="field"><label>保荐人</label>
                     <select id="sp">
-                        <option value="3">高盛</option>
-                        <option value="3">摩根士丹利</option>
-                        <option value="3" selected>中金</option>
-                        <option value="3">中信证券</option>
-                        <option value="2">华泰</option>
-                        <option value="2">海通</option>
-                        <option value="1.5">中信建投</option>
-                        <option value="1.5">国泰君安</option>
-                        <option value="1">招银</option>
-                        <option value="1">农银</option>
-                        <option value="1">其他中资</option>
-                        <option value="0.5">小型券商</option>
+                        <option value="3">高盛</option><option value="3">摩根士丹利</option>
+                        <option value="3" selected>中金</option><option value="3">中信证券</option>
+                        <option value="2">华泰</option><option value="2">海通</option>
+                        <option value="1.5">中信建投</option><option value="1.5">国泰君安</option>
+                        <option value="1">招银</option><option value="1">农银</option>
+                        <option value="1">其他中资</option><option value="0.5">小型券商</option>
                     </select>
                 </div>
-                <div class="field">
-                    <label>行业</label>
+                <div class="field"><label>行业</label>
                     <select id="ind">
                         <option value="5" selected>半导体/芯片/AI</option>
                         <option value="4">新能源/光伏/储能</option>
@@ -219,22 +197,10 @@
                         <option value="1">化工/钢铁/纺织</option>
                     </select>
                 </div>
-                <div class="field">
-                    <label>Beta (云端计算)</label>
-                    <input type="number" id="beta" step="0.01" readonly>
-                </div>
-                <div class="field">
-                    <label>Alpha (云端计算)</label>
-                    <input type="number" id="alpha" step="0.01" readonly>
-                </div>
-                <div class="field">
-                    <label>A股45日涨幅% (云端计算)</label>
-                    <input type="number" id="ret45" step="0.01" readonly>
-                </div>
-                <div class="field">
-                    <label>价格位置 (云端计算)</label>
-                    <input type="number" id="pos" step="0.0001" readonly>
-                </div>
+                <div class="field"><label>Beta (自动计算)</label><input type="number" id="beta" step="0.01" readonly></div>
+                <div class="field"><label>Alpha (自动计算)</label><input type="number" id="alpha" step="0.01" readonly></div>
+                <div class="field"><label>A股45日涨幅% (自动计算)</label><input type="number" id="ret45" step="0.01" readonly></div>
+                <div class="field"><label>价格位置 (自动计算)</label><input type="number" id="pos" step="0.0001" readonly></div>
             </div>
 
             <button class="btn" id="scoreBtn" onclick="doScore()" style="display:none;">🚀 开始评分</button>
@@ -257,10 +223,57 @@
 <script>
 let stockData = {};
 
-// ========== 配置：修改这里为你的Worker地址 ==========
-// 部署后把下面的空字符串改成你的Worker地址
-// 例如: "https://ah-ipo-data.yourname.workers.dev"
-const DEFAULT_WORKER_URL = "";
+// 腾讯K线API (CORS友好)
+async function fetchKlines(code) {
+    const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
+    // 腾讯API: 不指定日期反而能返回更多数据
+    const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tcode},day,,,120,qfq`;
+    const res = await fetch(url);
+    const json = await res.json();
+
+    const data = json.data && json.data[tcode];
+    if (!data || !data.qfqday) throw new Error('无法获取K线数据');
+
+    // 腾讯返回: [["2026-01-26", "开盘", "收盘", "最低", "最高", "成交量"], ...]
+    return data.qfqday.map(d => ({
+        date: d[0].replace(/-/g, ''), // "2026-01-26" → "20260126"
+        open: +d[1],
+        close: +d[2],
+        low: +d[3],
+        high: +d[4],
+    }));
+}
+
+async function fetchBenchKlines() {
+    // 沪深300: sh000300 (指数没有复权，用day而不是qfqday)
+    const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000300,day,,,120,qfq`;
+    const res = await fetch(url);
+    const json = await res.json();
+
+    const data = json.data && json.data['sh000300'];
+    // 指数用day，股票用qfqday
+    const klines = data && (data.qfqday || data.day);
+    if (!klines) throw new Error('无法获取沪深300数据');
+
+    return klines.map(d => ({
+        date: d[0].replace(/-/g, ''),
+        close: +d[2],
+    }));
+}
+
+async function fetchStockInfo(code) {
+    const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
+    const res = await fetch(`https://qt.gtimg.cn/q=${tcode}`);
+    const text = await res.text();
+    const m = text.match(/v_[^=]+="([^"]+)"/);
+    if (!m) return { name: code, cap: null };
+
+    const parts = m[1].split('~');
+    return {
+        name: parts[1] || code,
+        cap: parts[44] ? parseFloat(parts[44]) / 1e4 : null,
+    };
+}
 
 async function fetchData() {
     const code = document.getElementById('code').value.trim();
@@ -269,42 +282,67 @@ async function fetchData() {
         return;
     }
 
-    let workerUrl = document.getElementById('workerUrl').value.trim();
-    if (!workerUrl) {
-        workerUrl = DEFAULT_WORKER_URL;
-    }
-    if (!workerUrl) {
-        showError('请先填写Cloudflare Worker地址（见部署说明）');
-        return;
-    }
-
     document.getElementById('fetchBtn').disabled = true;
     document.getElementById('loading').style.display = 'block';
     document.getElementById('error').innerHTML = '';
 
     try {
-        const res = await fetch(`${workerUrl}?code=${code}`);
-        const data = await res.json();
+        // 并行请求
+        const [klines, benchKlines, info] = await Promise.all([
+            fetchKlines(code),
+            fetchBenchKlines(),
+            fetchStockInfo(code),
+        ]);
 
-        if (data.error) {
-            throw new Error(data.error);
+        if (klines.length < 45) throw new Error('K线数据不足45天');
+
+        // 对齐
+        const stockMap = new Map(klines.map(d => [d.date, d]));
+        const benchMap = new Map(benchKlines.map(d => [d.date, d]));
+        const dates = klines.map(d => d.date).filter(d => benchMap.has(d));
+        dates.sort();
+
+        const stockAligned = dates.map(d => stockMap.get(d));
+        const benchAligned = dates.map(d => benchMap.get(d));
+        const closes = stockAligned.map(d => d.close);
+        const benchCloses = benchAligned.map(d => d.close);
+
+        // 45日涨幅
+        const ret45 = closes.length >= 46
+            ? (closes[closes.length - 1] - closes[closes.length - 46]) / closes[closes.length - 46] * 100
+            : (closes[closes.length - 1] - closes[0]) / closes[0] * 100;
+
+        // 价格位置
+        const high120 = Math.max(...closes);
+        const low120 = Math.min(...closes);
+        const pos = (closes[closes.length - 1] - low120) / (high120 - low120);
+
+        // Beta & Alpha
+        const stockR = [], benchR = [];
+        for (let i = 1; i < stockAligned.length; i++) {
+            stockR.push((closes[i] - closes[i-1]) / closes[i-1]);
+            benchR.push((benchCloses[i] - benchCloses[i-1]) / benchCloses[i-1]);
         }
+        const beta = calcBeta(stockR, benchR);
+        const alpha = calcAlpha(stockR, benchR, beta);
 
-        stockData = data;
+        stockData = {
+            code, name: info.name,
+            ret45, pos, beta, alpha,
+            cap: info.cap,
+        };
 
         // 填充表单
-        document.getElementById('beta').value = data.beta.toFixed(2);
-        document.getElementById('alpha').value = data.alpha.toFixed(2);
-        document.getElementById('ret45').value = data.ret45.toFixed(2);
-        document.getElementById('pos').value = data.pos.toFixed(4);
+        document.getElementById('beta').value = beta.toFixed(2);
+        document.getElementById('alpha').value = alpha.toFixed(2);
+        document.getElementById('ret45').value = ret45.toFixed(2);
+        document.getElementById('pos').value = pos.toFixed(4);
 
-        // 显示市场信息
-        const capStr = data.cap ? `${data.cap.toFixed(0)}亿` : 'N/A';
-        const info = `📈 ${data.name} (${data.code}) | Alpha=${(data.alpha*100).toFixed(1)}% | Beta=${data.beta.toFixed(2)} | 45日=${data.ret45.toFixed(1)}% | 位置=${(data.pos*100).toFixed(0)}% | 市值=${capStr}`;
-        document.getElementById('marketInfo').innerHTML = info;
+        const capStr = info.cap ? `${info.cap.toFixed(0)}亿` : 'N/A';
+        document.getElementById('marketInfo').innerHTML =
+            `📈 ${info.name} (${code}) | Alpha=${(alpha*100).toFixed(1)}% | Beta=${beta.toFixed(2)} | 45日=${ret45.toFixed(1)}% | 位置=${(pos*100).toFixed(0)}% | 市值=${capStr}`;
         document.getElementById('marketInfo').style.display = 'block';
 
-        // 显示手动输入区
         document.getElementById('manualInputs').style.display = 'grid';
         document.getElementById('scoreBtn').style.display = 'block';
 
@@ -316,24 +354,55 @@ async function fetchData() {
     }
 }
 
-function doScore() {
-    if (!stockData.code) {
-        showError('请先获取数据');
-        return;
+function calcBeta(sr, br) {
+    const n = sr.length;
+    if (n < 2) return 1;
+    const ms = sr.reduce((a,b) => a+b, 0) / n;
+    const mb = br.reduce((a,b) => a+b, 0) / n;
+    let cov = 0, vr = 0;
+    for (let i = 0; i < n; i++) {
+        cov += (sr[i] - ms) * (br[i] - mb);
+        vr += (br[i] - mb) ** 2;
     }
+    return vr > 0 ? (cov/n) / (vr/n) : 1;
+}
 
-    const r = stockData.ret45;
-    const b = stockData.beta;
-    const p = stockData.pos;
-    const a = stockData.alpha;
-    const disc = parseFloat(document.getElementById('discount').value) || 0;
-    const cs = parseFloat(document.getElementById('cs').value) || 0;
-    const sp = parseFloat(document.getElementById('sp').value) || 1;
-    const ind = parseFloat(document.getElementById('ind').value) || 2;
+function calcAlpha(sr, br, beta) {
+    const n = sr.length;
+    if (n < 2) return 0;
+    const ms = sr.reduce((a,b) => a+b, 0) / n;
+    const mb = br.reduce((a,b) => a+b, 0) / n;
+    return (ms - beta * mb) * 252;
+}
+
+function doScore() {
+    if (!stockData.code) { showError('请先获取数据'); return; }
+
+    const r = stockData.ret45, b = stockData.beta, p = stockData.pos, a = stockData.alpha;
+    const disc = +document.getElementById('discount').value || 0;
+    const cs = +document.getElementById('cs').value || 0;
+    const sp = +document.getElementById('sp').value || 1;
+    const ind = +document.getElementById('ind').value || 2;
     const cap = stockData.cap || 0;
 
     const s_ret = r > 15 ? 17 : r > 5 ? 14 : r > -5 ? 10 : r > -15 ? 6 : 3;
-    const s_beta = b > 2 ? 21 : b > 1.5 ? 16 : b > 1 ? 11 : b > 0.5 ? 6 : 3;
+    // 条件Beta评分：方向依赖 - 市场涨时高Beta加分，跌时高Beta减分
+    function calcBetaScore(beta, ret45) {
+        // 基础Beta分（正向）
+        const base = beta > 2 ? 21 : beta > 1.5 ? 16 : beta > 1 ? 11 : beta > 0.5 ? 6 : 3;
+        // 方向修正系数：ret45映射到 -0.5 ~ 1.0
+        let direction = (ret45 + 10) / 30;
+        direction = Math.max(-0.5, Math.min(1.0, direction));
+        if (direction >= 0) {
+            return base * direction;
+        } else {
+            const reverse = 21 - base; // beta越高，reverse越小（扣分越多）
+            return reverse * Math.abs(direction);
+        }
+    }
+
+    const s_beta = calcBetaScore(b, r);
+    const s_beta_max = 21;
     const s_cs = cs > 50 ? 15 : cs > 40 ? 12 : cs > 30 ? 8 : 4;
     const s_pos = p > 0.8 ? 10 : p > 0.6 ? 8 : p > 0.4 ? 6 : p > 0.2 ? 3 : 1;
     const s_alpha = a > 1 ? 2 : a > 0.5 ? 1.5 : a > 0 ? 1 : a > -0.5 ? 0.5 : 0;
@@ -353,7 +422,7 @@ function doScore() {
 
     const factors = [
         { name: 'A股涨跌幅', score: s_ret, max: 17, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
-        { name: 'Beta(波动)', score: s_beta, max: 21, detail: `β=${b.toFixed(2)}`, color: b > 2 ? '#dd2c00' : '#64dd17' },
+        { name: 'Beta(波动)', score: s_beta, max: s_beta_max, detail: `β=${b.toFixed(2)} (ret45=${r.toFixed(1)}%)`, color: r >= -5 ? (b > 2 ? '#00c853' : '#64dd17') : (b > 2 ? '#dd2c00' : '#ff9100') },
         { name: '基石占比', score: s_cs, max: 15, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
         { name: '价格位置', score: s_pos, max: 10, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
         { name: 'Alpha', score: s_alpha, max: 2, detail: `α=${(a*100).toFixed(1)}%`, color: '#00c853' },
@@ -367,12 +436,9 @@ function doScore() {
     document.getElementById('resScore').textContent = total.toFixed(1);
     document.getElementById('resGrade').textContent = `等级 ${grade}`;
     document.getElementById('resAdvice').textContent = advice;
+    document.getElementById('scoreBox').className = 'score-box ' + boxClass;
 
-    const box = document.getElementById('scoreBox');
-    box.className = 'score-box ' + boxClass;
-
-    const tbody = document.getElementById('factorsBody');
-    tbody.innerHTML = factors.map(f => {
+    document.getElementById('factorsBody').innerHTML = factors.map(f => {
         const pct = (f.score / f.max * 100).toFixed(0);
         return `<tr><td>${f.name}</td><td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${f.color}"></div></div></td><td class="score-cell">${f.score.toFixed(1)}/${f.max}</td><td style="color:#888;font-size:12px">${f.detail}</td></tr>`;
     }).join('');
