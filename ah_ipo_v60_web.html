@@ -161,8 +161,8 @@
         </div>
         <div class="content">
             <div class="note">
-                💡 输入A股6位代码，自动获取行情并计算<b>估算首日破发概率</b>。<br>
-                <b>V6.4</b>：成熟系数模型（参考专业产品设计）| 评分 = 100×(1-破发概率) | <b>仅供研究参考，不构成投资建议</b>
+                💡 输入A股6位代码（支持主板/创业板/科创板<b>688</b>），自动计算Beta/Alpha/45日涨幅/价格位置/个股波动率。<br>
+                <b>V6.2 修复</b>：市值单位修正、Alpha量纲统一、真正个股波动率（残差标准差）、100分归一化、输入校验、风险提示
             </div>
 
             <div class="input-group full">
@@ -272,10 +272,7 @@ async function fetchBenchKlines() {
 async function fetchStockInfo(code) {
     const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
     const res = await fetch(`https://qt.gtimg.cn/q=${tcode}`);
-    // 腾讯API返回GBK编码，需要手动解码
-    const buffer = await res.arrayBuffer();
-    const decoder = new TextDecoder('gbk');
-    const text = decoder.decode(buffer);
+    const text = await res.text();
     const m = text.match(/v_[^=]+="([^"]+)"/);
     if (!m) return { name: code, cap: null };
 
@@ -445,10 +442,7 @@ function doScore() {
     const effectiveLabel = indChanged ? opt.dataset.label : autoInfo.label;
     const effectiveBase = indChanged ? parseInt(opt.value) : autoInfo.base;
 
-    // === V6.4 成熟系数模型 (参考专业产品设计) ===
-    // logit = -0.18 + Σ(coefficient × transform(value))
-    // 负系数 = 保护因子(值高→破发概率低), 正系数 = 风险因子(值高→破发概率高)
-
+    // === V6.4 成熟系数模型 ===
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
     function sigmoid(z) { return 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, z)))); }
 
@@ -483,15 +477,15 @@ function doScore() {
         });
     }
 
-    // 行业和保荐人（平滑类别编码）
+    // 行业和保荐人
     const industryMap = { 5: -0.30, 4: -0.15, 3: 0.10, 2: 0.25, 1: 0.40 };
     const sponsorMap = { 3: -0.15, 2: 0.05, 1.5: 0.10, 1: 0.15, 0.5: 0.25 };
     const indContrib = industryMap[effectiveBase] || 0.20;
     const spContrib = sponsorMap[sp] || 0.15;
     logit += indContrib + spContrib;
 
-    features.push({ label: '行业历史风险', contribution: indContrib, value: null, detail: () => effectiveLabel });
-    features.push({ label: '保荐人历史风险', contribution: spContrib, value: null, detail: () => '' });
+    features.push({ label: '行业历史风险', contribution: indContrib, value: null, detail: effectiveLabel });
+    features.push({ label: '保荐人历史风险', contribution: spContrib, value: null, detail: '' });
 
     const rawProb = sigmoid(logit);
     const probability = Math.max(0.03, Math.min(0.92, rawProb));
@@ -533,12 +527,12 @@ function doScore() {
     // 正面/负面因子摘要
     if (protective.length > 0) {
         html += `<tr style="background:#e8f5e9"><td colspan="4" style="padding:10px 12px;font-size:13px;color:#2e7d32">
-            <b>主要降低风险：</b>${protective.map(f => `${f.label} (${f.contribution > 0 ? '+' : ''}${f.contribution.toFixed(2)})`).join('、')}
+            <b>主要降低风险：</b>${protective.map(f => `${f.label} (${f.contribution.toFixed(2)})`).join('、')}
         </td></tr>`;
     }
     if (risky.length > 0) {
         html += `<tr style="background:#ffebee"><td colspan="4" style="padding:10px 12px;font-size:13px;color:#c62828">
-            <b>主要提高风险：</b>${risky.map(f => `${f.label} (${f.contribution > 0 ? '+' : ''}${f.contribution.toFixed(2)})`).join('、')}
+            <b>主要提高风险：</b>${risky.map(f => `${f.label} (+${f.contribution.toFixed(2)})`).join('、')}
         </td></tr>`;
     }
 
@@ -549,10 +543,10 @@ function doScore() {
     for (const f of ordered) {
         const isRisk = f.contribution > 0;
         const width = Math.max(3, Math.abs(f.contribution) / maxContrib * 100);
-        const detail = f.value === null ? (typeof f.detail === 'function' ? f.detail() : f.detail) : f.detail(f.value);
+        const detail = f.value === null ? f.detail : f.detail;
         html += `<tr>
             <td>${f.label}</td>
-            <td><div class="progress-bar"><div class="progress-fill" style="width:${width.toFixed(0)}%;background:${isRisk ? '#dd2c00' : '#00c853'}"></div></div></td>
+            <td style="width:35%"><div class="progress-bar"><div class="progress-fill" style="width:${width.toFixed(0)}%;background:${isRisk ? '#dd2c00' : '#00c853'}"></div></div></td>
             <td class="score-cell" style="color:${isRisk ? '#c62828' : '#2e7d32'}">${f.contribution > 0 ? '+' : ''}${f.contribution.toFixed(2)}</td>
             <td style="color:#888;font-size:12px">${detail}</td>
         </tr>`;
@@ -566,6 +560,7 @@ function doScore() {
     document.getElementById('factorsBody').innerHTML = html;
     document.getElementById('result').style.display = 'block';
 }
+
 function showError(msg) {
     document.getElementById('error').innerHTML = `<div class="error">${msg}</div>`;
 }
