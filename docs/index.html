@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📊 AH股IPO评分系统 V5.9</title>
+    <title>📊 AH股IPO评分系统 V6.0</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -141,18 +141,28 @@
             padding: 12px; border-radius: 8px;
             margin-top: 10px; font-size: 14px;
         }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+        .tag-new { background: #e3f2fd; color: #1565c0; }
+        .tag-hot { background: #fce4ec; color: #c62828; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 AH股IPO评分系统 V5.9</h1>
-            <p>基于50只历史AH股IPO回测优化 | 纯前端自动计算Beta/Alpha</p>
+            <h1>📊 AH股IPO评分系统 V6.0</h1>
+            <p>条件Beta | 行业加权 | 交互项 | 平滑评分 | 大市值偏好</p>
         </div>
         <div class="content">
             <div class="note">
-                💡 输入A股6位代码（支持主板/创业板/科创板），点击「获取数据」自动拉取K线并计算Beta/Alpha/45日涨幅/价格位置。
-                科创板代码以 <b>688</b> 开头。然后输入AH折价率、基石占比等参数，点击「评分」。
+                💡 输入A股6位代码（支持主板/创业板/科创板<b>688</b>），自动计算Beta/Alpha/45日涨幅/价格位置。<br>
+                V6.0 新增：<b>交互项</b>（A股涨+高折价=超级利好）、<b>行业Beta加权</b>、<b>大市值加分</b>、<b>平滑评分</b>
             </div>
 
             <div class="input-group full">
@@ -183,18 +193,17 @@
                         <option value="1">其他中资</option><option value="0.5">小型券商</option>
                     </select>
                 </div>
-                <div class="field"><label>行业</label>
+                <div class="field"><label>行业 <span class="tag tag-hot">影响Beta权重</span></label>
                     <select id="ind">
-                        <option value="5" selected>半导体/芯片/AI</option>
-                        <option value="4">新能源/光伏/储能</option>
-                        <option value="4">云计算/软件/通信</option>
-                        <option value="4">机器人/精密制造</option>
-                        <option value="4">创新药/医疗器械</option>
-                        <option value="3">新材料/军工</option>
-                        <option value="2">食品饮料/消费</option>
-                        <option value="2">医药</option>
-                        <option value="1">银行/保险/地产</option>
-                        <option value="1">化工/钢铁/纺织</option>
+                        <option value="半导体" data-weight="1.3" selected>半导体/芯片/AI</option>
+                        <option value="新能源" data-weight="1.2">新能源/光伏/储能</option>
+                        <option value="科技制造" data-weight="1.2">云计算/软件/通信</option>
+                        <option value="制造" data-weight="1.1">机器人/精密制造</option>
+                        <option value="医药" data-weight="1.0">创新药/医疗器械</option>
+                        <option value="新材料军工" data-weight="1.0">新材料/军工</option>
+                        <option value="消费" data-weight="0.8">食品饮料/消费</option>
+                        <option value="金融地产" data-weight="0.7">银行/保险/地产</option>
+                        <option value="周期" data-weight="0.7">化工/钢铁/纺织</option>
                     </select>
                 </div>
                 <div class="field"><label>Beta (自动计算)</label><input type="number" id="beta" step="0.01" readonly></div>
@@ -223,7 +232,7 @@
 <script>
 let stockData = {};
 
-// 腾讯K线API (CORS友好)
+// ========== 腾讯K线API ==========
 async function fetchKlines(code) {
     const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
     const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tcode},day,,,120,qfq`;
@@ -233,7 +242,6 @@ async function fetchKlines(code) {
     const data = json.data && json.data[tcode];
     if (!data) throw new Error('无法获取K线数据');
 
-    // 普通股票用 qfqday（前复权），科创板只有 day（不复权）
     const klines = data.qfqday || data.day;
     if (!klines || klines.length === 0) throw new Error('K线数据为空');
 
@@ -247,13 +255,11 @@ async function fetchKlines(code) {
 }
 
 async function fetchBenchKlines() {
-    // 沪深300: sh000300 (指数没有复权，用day而不是qfqday)
     const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000300,day,,,120,qfq`;
     const res = await fetch(url);
     const json = await res.json();
 
     const data = json.data && json.data['sh000300'];
-    // 指数用day，股票用qfqday
     const klines = data && (data.qfqday || data.day);
     if (!klines) throw new Error('无法获取沪深300数据');
 
@@ -289,7 +295,6 @@ async function fetchData() {
     document.getElementById('error').innerHTML = '';
 
     try {
-        // 并行请求
         const [klines, benchKlines, info] = await Promise.all([
             fetchKlines(code),
             fetchBenchKlines(),
@@ -298,7 +303,6 @@ async function fetchData() {
 
         if (klines.length < 45) throw new Error('K线数据不足45天');
 
-        // 对齐
         const stockMap = new Map(klines.map(d => [d.date, d]));
         const benchMap = new Map(benchKlines.map(d => [d.date, d]));
         const dates = klines.map(d => d.date).filter(d => benchMap.has(d));
@@ -309,17 +313,14 @@ async function fetchData() {
         const closes = stockAligned.map(d => d.close);
         const benchCloses = benchAligned.map(d => d.close);
 
-        // 45日涨幅
         const ret45 = closes.length >= 46
             ? (closes[closes.length - 1] - closes[closes.length - 46]) / closes[closes.length - 46] * 100
             : (closes[closes.length - 1] - closes[0]) / closes[0] * 100;
 
-        // 价格位置
         const high120 = Math.max(...closes);
         const low120 = Math.min(...closes);
         const pos = (closes[closes.length - 1] - low120) / (high120 - low120);
 
-        // Beta & Alpha
         const stockR = [], benchR = [];
         for (let i = 1; i < stockAligned.length; i++) {
             stockR.push((closes[i] - closes[i-1]) / closes[i-1]);
@@ -328,13 +329,8 @@ async function fetchData() {
         const beta = calcBeta(stockR, benchR);
         const alpha = calcAlpha(stockR, benchR, beta);
 
-        stockData = {
-            code, name: info.name,
-            ret45, pos, beta, alpha,
-            cap: info.cap,
-        };
+        stockData = { code, name: info.name, ret45, pos, beta, alpha, cap: info.cap };
 
-        // 填充表单
         document.getElementById('beta').value = beta.toFixed(2);
         document.getElementById('alpha').value = alpha.toFixed(2);
         document.getElementById('ret45').value = ret45.toFixed(2);
@@ -342,7 +338,7 @@ async function fetchData() {
 
         const capStr = info.cap ? `${info.cap.toFixed(0)}亿` : 'N/A';
         document.getElementById('marketInfo').innerHTML =
-            `📈 ${info.name} (${code}) | Alpha=${(alpha*100).toFixed(1)}% | Beta=${beta.toFixed(2)} | 45日=${ret45.toFixed(1)}% | 位置=${(pos*100).toFixed(0)}% | 市值=${capStr}`;
+            `📈 ${info.name} (${code}) | α=${(alpha*100).toFixed(1)}% | β=${beta.toFixed(2)} | 45日=${ret45.toFixed(1)}% | 位置=${(pos*100).toFixed(0)}% | 市值=${capStr}`;
         document.getElementById('marketInfo').style.display = 'block';
 
         document.getElementById('manualInputs').style.display = 'grid';
@@ -377,6 +373,38 @@ function calcAlpha(sr, br, beta) {
     return (ms - beta * mb) * 252;
 }
 
+// ========== V6.0 平滑评分 ==========
+function smoothScore(value, thresholds, scores) {
+    if (value <= thresholds[0]) return scores[0];
+    if (value >= thresholds[thresholds.length - 1]) return scores[scores.length - 1];
+    for (let i = 0; i < thresholds.length - 1; i++) {
+        if (thresholds[i] <= value && value <= thresholds[i + 1]) {
+            const t = (value - thresholds[i]) / (thresholds[i + 1] - thresholds[i]);
+            return scores[i] + t * (scores[i + 1] - scores[i]);
+        }
+    }
+    return scores[scores.length - 1];
+}
+
+// ========== 行业映射 + Beta权重 ==========
+function getIndustryInfo(name) {
+    const patterns = {
+        "半导体|芯片|集成|微装|澜起|兆易|纳芯|豪威|国民|芯基|芯碁|峰岹": { label: "半导体", weight: 1.3, base: 5 },
+        "新能源|光伏|储能|宁德|钧达|大金重工|天岳|先导": { label: "新能源", weight: 1.2, base: 4 },
+        "软件|通信|科技|剑桥|广和通|美格智能|龙旗|华勤|立讯|蓝思|三一|大族": { label: "科技制造", weight: 1.2, base: 4 },
+        "机器人|精密|制造|埃斯顿|兆威|三环|鼎泰|广合|胜宏|牧原": { label: "制造", weight: 1.1, base: 4 },
+        "医药|医疗|生物|恒瑞|可孚|迈威": { label: "医药", weight: 1.0, base: 4 },
+        "新材料|军工|国恩|沃尔|吉宏|赤峰": { label: "新材料军工", weight: 1.0, base: 3 },
+        "饮料|食品|消费|安井|东鹏|海天": { label: "消费", weight: 0.8, base: 2 },
+        "银行|保险|地产|期货": { label: "金融地产", weight: 0.7, base: 1 },
+        "化工|钢铁|纺织|滨化": { label: "周期", weight: 0.7, base: 1 },
+    };
+    for (const [p, info] of Object.entries(patterns)) {
+        if (p.split("|").some(k => name.includes(k))) return info;
+    }
+    return { label: "其他", weight: 1.0, base: 2 };
+}
+
 function doScore() {
     if (!stockData.code) { showError('请先获取数据'); return; }
 
@@ -384,36 +412,60 @@ function doScore() {
     const disc = +document.getElementById('discount').value || 0;
     const cs = +document.getElementById('cs').value || 0;
     const sp = +document.getElementById('sp').value || 1;
-    const ind = +document.getElementById('ind').value || 2;
+    const indSelect = document.getElementById('ind');
+    const indWeight = parseFloat(indSelect.options[indSelect.selectedIndex].dataset.weight) || 1.0;
+    const indBase = parseInt(indSelect.value) || 2;
     const cap = stockData.cap || 0;
 
-    const s_ret = r > 15 ? 17 : r > 5 ? 14 : r > -5 ? 10 : r > -15 ? 6 : 3;
-    // 条件Beta评分：方向依赖 - 市场涨时高Beta加分，跌时高Beta减分
-    function calcBetaScore(beta, ret45) {
-        // 基础Beta分（正向）
-        const base = beta > 2 ? 21 : beta > 1.5 ? 16 : beta > 1 ? 11 : beta > 0.5 ? 6 : 3;
-        // 方向修正系数：ret45映射到 -0.5 ~ 1.0
-        let direction = (ret45 + 10) / 30;
-        direction = Math.max(-0.5, Math.min(1.0, direction));
-        if (direction >= 0) {
-            return base * direction;
-        } else {
-            const reverse = 21 - base; // beta越高，reverse越小（扣分越多）
-            return reverse * Math.abs(direction);
-        }
+    // 行业信息（自动检测或手动选择）
+    const indInfo = getIndustryInfo(stockData.name);
+    const effectiveWeight = indWeight;
+    const effectiveBase = indInfo.base;
+
+    // 1. 平滑连续的A股涨跌幅 (15分)
+    const s_ret = smoothScore(r, [-30, -15, -5, 5, 15, 30], [1, 4, 8, 12, 15, 15]);
+
+    // 2. 条件Beta（行业加权）(21分封顶)
+    const betaBase = b > 2 ? 21 : b > 1.5 ? 16 : b > 1 ? 11 : b > 0.5 ? 6 : 3;
+    let direction = (r + 10) / 30;
+    direction = Math.max(-0.5, Math.min(1.0, direction));
+    let s_beta_raw;
+    if (direction >= 0) {
+        s_beta_raw = betaBase * direction;
+    } else {
+        s_beta_raw = (21 - betaBase) * Math.abs(direction);
     }
+    const s_beta = Math.min(21, s_beta_raw * effectiveWeight);
 
-    const s_beta = calcBetaScore(b, r);
-    const s_beta_max = 21;
-    const s_cs = cs > 50 ? 15 : cs > 40 ? 12 : cs > 30 ? 8 : 4;
-    const s_pos = p > 0.8 ? 10 : p > 0.6 ? 8 : p > 0.4 ? 6 : p > 0.2 ? 3 : 1;
-    const s_alpha = a > 1 ? 2 : a > 0.5 ? 1.5 : a > 0 ? 1 : a > -0.5 ? 0.5 : 0;
-    const s_disc = disc > 50 ? 9 : disc > 40 ? 7 : disc > 30 ? 5 : disc > 20 ? 2 : 1;
-    const s_ind = ind * 3.4;
-    const s_cap = cap < 200 ? 4 : cap < 1000 ? 3 : cap < 5000 ? 2 : 1;
-    const s_sp = sp * 1.67;
+    // 3. 基石占比 (13分)
+    const s_cs = smoothScore(cs, [0, 20, 30, 40, 50, 70], [1, 4, 7, 10, 13, 13]);
 
-    const total = s_ret + s_beta + s_cs + s_pos + s_alpha + s_disc + s_ind + s_cap + s_sp;
+    // 4. 价格位置 (10分)
+    const s_pos = smoothScore(p, [0, 0.2, 0.4, 0.6, 0.8, 1.0], [2, 4, 6, 8, 10, 8]);
+
+    // 5. 个股波动 = |Alpha| (3分)
+    const s_vol = smoothScore(Math.abs(a), [0, 0.5, 1.0, 2.0, 3.0], [0.5, 1, 2, 3, 3]);
+
+    // 6. AH折价率 (10分)
+    const s_disc = smoothScore(disc, [0, 20, 30, 40, 50, 70], [0.5, 2, 4, 6, 8, 10]);
+
+    // 7. 交互项：ret45 × 折价率 (8分)
+    let s_interact = 0;
+    if (r > -5 && disc > 40) s_interact = 8;
+    else if (r > -5 && disc > 30) s_interact = 5;
+    else if (r > -15 && disc > 40) s_interact = 3;
+    else if (disc > 30) s_interact = 1;
+
+    // 8. 行业 (15分)
+    const s_ind = effectiveBase * 3.0;
+
+    // 9. 市值（反向：大市值加分）(5分)
+    const s_cap = cap < 200 ? 1 : cap < 1000 ? 3 : cap < 5000 ? 4 : 5;
+
+    // 10. 保荐人 (4分)
+    const s_sp = sp * 1.33;
+
+    const total = s_ret + s_beta + s_cs + s_pos + s_vol + s_disc + s_interact + s_ind + s_cap + s_sp;
 
     let grade, advice, boxClass;
     if (total >= 80) { grade = 'A'; advice = '强烈推荐参与'; boxClass = 'grade-a'; }
@@ -423,15 +475,16 @@ function doScore() {
     else { grade = 'D'; advice = '建议回避'; boxClass = 'grade-d'; }
 
     const factors = [
-        { name: 'A股涨跌幅', score: s_ret, max: 17, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
-        { name: 'Beta(波动)', score: s_beta, max: s_beta_max, detail: `β=${b.toFixed(2)} (ret45=${r.toFixed(1)}%)`, color: r >= -5 ? (b > 2 ? '#00c853' : '#64dd17') : (b > 2 ? '#dd2c00' : '#ff9100') },
-        { name: '基石占比', score: s_cs, max: 15, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
+        { name: 'A股涨跌幅', score: s_ret, max: 15, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
+        { name: 'Beta(条件+行业加权)', score: s_beta, max: 21, detail: `β=${b.toFixed(2)} × ${effectiveWeight.toFixed(1)}`, color: r >= -5 ? '#00c853' : '#ff9100' },
+        { name: '基石占比', score: s_cs, max: 13, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
         { name: '价格位置', score: s_pos, max: 10, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
-        { name: 'Alpha', score: s_alpha, max: 2, detail: `α=${(a*100).toFixed(1)}%`, color: '#00c853' },
-        { name: 'AH折价率', score: s_disc, max: 9, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
-        { name: '行业', score: s_ind, max: 17, detail: '', color: '#00c853' },
-        { name: '市值规模', score: s_cap, max: 4, detail: `${cap.toFixed(0)}亿`, color: '#64dd17' },
-        { name: '保荐人', score: s_sp, max: 5, detail: '', color: '#64dd17' },
+        { name: '个股波动(|Alpha|)', score: s_vol, max: 3, detail: `|α|=${Math.abs(a).toFixed(2)}`, color: '#00c853' },
+        { name: 'AH折价率', score: s_disc, max: 10, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
+        { name: '交互项(情绪×便宜)', score: s_interact, max: 8, detail: s_interact >= 5 ? '🚀 共振' : '一般', color: s_interact >= 5 ? '#00c853' : '#e0e0e0' },
+        { name: '行业', score: s_ind, max: 15, detail: `${indInfo.label} (权重${effectiveWeight})`, color: '#00c853' },
+        { name: '市值规模', score: s_cap, max: 5, detail: `${cap.toFixed(0)}亿`, color: s_cap >= 4 ? '#00c853' : '#64dd17' },
+        { name: '保荐人', score: s_sp, max: 4, detail: '', color: '#64dd17' },
     ];
 
     document.getElementById('resName').textContent = `${stockData.name} (${stockData.code})`;
@@ -441,7 +494,7 @@ function doScore() {
     document.getElementById('scoreBox').className = 'score-box ' + boxClass;
 
     document.getElementById('factorsBody').innerHTML = factors.map(f => {
-        const pct = (f.score / f.max * 100).toFixed(0);
+        const pct = Math.min(100, (f.score / f.max * 100)).toFixed(0);
         return `<tr><td>${f.name}</td><td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${f.color}"></div></div></td><td class="score-cell">${f.score.toFixed(1)}/${f.max}</td><td style="color:#888;font-size:12px">${f.detail}</td></tr>`;
     }).join('');
 
