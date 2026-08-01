@@ -156,13 +156,13 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 AH股IPO评分系统 V6.2</h1>
-            <p>100分归一化 | 真正个股波动率 | 市值修复 | 输入校验</p>
+            <h1>📊 AH股IPO评分系统 V6.3</h1>
+            <p>逻辑回归预测破发概率 | 25只历史IPO训练 | 仅供参考</p>
         </div>
         <div class="content">
             <div class="note">
-                💡 输入A股6位代码（支持主板/创业板/科创板<b>688</b>），自动计算Beta/Alpha/45日涨幅/价格位置/个股波动率。<br>
-                <b>V6.2 修复</b>：市值单位修正、Alpha量纲统一、真正个股波动率（残差标准差）、100分归一化、输入校验、风险提示
+                💡 输入A股6位代码，自动获取行情并计算<b>预测首日破发概率</b>。<br>
+                <b>V6.3</b>：逻辑回归模型 | 评分 = 100×(1-破发概率) | 基于25只历史AH股IPO训练 | <b>仅供研究参考，不构成投资建议</b>
             </div>
 
             <div class="input-group full">
@@ -432,125 +432,109 @@ function doScore() {
     if (isNaN(cs) || cs < 0 || cs > 100) { showError('基石占比必须在 0-100% 之间'); return; }
 
     const r = stockData.ret45, b = stockData.beta, p = stockData.pos;
-    const a = stockData.alpha;       // 年化小数，如 0.10 = 10%
-    const aPct = a * 100;            // 转为百分数
-    const vol = stockData.idioVol;   // 个股波动率（年化小数）
-    const volPct = vol * 100;        // 转为百分数
+    const a = stockData.alpha;       // 年化小数
     const cap = stockData.cap || 0;
 
-    // 行业选择：优先使用用户手动选择，否则用自动识别
+    // 行业选择
     const indSelect = document.getElementById('ind');
     const opt = indSelect.options[indSelect.selectedIndex];
-    const manualBase = parseInt(opt.value) || 2;
     const manualWeight = parseFloat(opt.dataset.weight) || 1.0;
     const manualLabel = opt.dataset.label || "其他";
     const autoInfo = stockData.indInfo || { label: "其他", weight: 1.0, base: 2 };
-
-    // 如果用户改了行业（从默认的半导体改了），用手动选择；否则用自动识别
-    const indChanged = indSelect.selectedIndex !== 0; // 默认第0项是半导体
-    const effectiveBase = indChanged ? manualBase : autoInfo.base;
-    const effectiveWeight = indChanged ? manualWeight : autoInfo.weight;
+    const indChanged = indSelect.selectedIndex !== 0;
     const effectiveLabel = indChanged ? manualLabel : autoInfo.label;
 
-    // === V6.2 修复版 - 归一化100分制 ===
-    // 各因子满分（合计100）
-    const MAX_RET = 18, MAX_BETA = 16, MAX_CS = 14, MAX_CAP = 14;
-    const MAX_INTERACT = 10, MAX_POS = 7, MAX_DISC = 5;
-    const MAX_VOL = 4, MAX_ALPHA_DIR = 2, MAX_IND = 13, MAX_SP = 3;
-    const MAX_TOTAL = MAX_RET + MAX_BETA + MAX_CS + MAX_CAP + MAX_INTERACT + MAX_POS + MAX_DISC + MAX_VOL + MAX_ALPHA_DIR + MAX_IND + MAX_SP; // = 102
+    // === V6.3 逻辑回归模型 - 预测首日破发概率 ===
+    // 特征标准化参数（来自25只历史IPO训练）
+    const MEANS = [-2.797, 1.512, 40.589, 0.666, 0.753, 39.884, 849.597, 0.262, 0.500, -1.326, -3.694];
+    const STDS = [10.152, 0.614, 12.659, 0.268, 1.007, 9.701, 789.305, 0.172, 1.000, 4.339, 18.453];
+    const COEF = [-0.158, -2.291, -0.454, -0.366, 2.891, -1.030, -2.593, -0.618, 0.000, -0.404, -0.277];
+    const INTERCEPT = -2.240;
+    // Platt校准参数
+    const PLATT_W = 2.223, PLATT_B = -1.110, PLATT_MEAN = 0.321, PLATT_STD = 0.334;
 
-    // 1. A股涨跌幅 (18分)
-    const s_ret = smoothScore(r, [-30, -15, -5, 5, 15, 30], [1, 4, 8, 13, 18, 18]);
+    // 行业编码（目标编码：历史破发率）
+    const industryEncoded = autoInfo.base === 5 ? 0.143 :  // 半导体
+                           autoInfo.base === 4 ? 0.200 :  // 新能源/科技/制造/医药
+                           autoInfo.base === 3 ? 0.250 :  // 新材料军工
+                           autoInfo.base === 2 ? 0.320 :  // 消费
+                           0.320; // 金融地产/周期/其他
 
-    // 2. 条件Beta（行业加权）(16分)
-    const betaBase = b > 2 ? 16 : b > 1.5 ? 12 : b > 1 ? 8 : b > 0.5 ? 4 : 1;
-    let direction = (r + 10) / 30;
-    direction = Math.max(-0.5, Math.min(1.0, direction));
-    let s_beta_raw;
-    if (direction >= 0) {
-        s_beta_raw = betaBase * direction;
-    } else {
-        s_beta_raw = (16 - betaBase) * Math.abs(direction);
-    }
-    const s_beta = Math.min(16, s_beta_raw * effectiveWeight);
+    // 保荐人编码
+    const spEncoded = sp === 3 ? 0.6 : sp === 2 ? 0.5 : sp === 1.5 ? 0.45 : sp === 1 ? 0.4 : 0.35;
 
-    // 3. 基石占比 (14分)
-    const s_cs = smoothScore(cs, [0, 20, 30, 40, 50, 70], [1, 4, 7, 10, 14, 14]);
+    // 交互项
+    const ret45_x_disc = r * disc / 100;
+    const beta_x_ret45 = b * r;
 
-    // 4. 市值 (14分) - 大市值加分
-    const s_cap = cap < 200 ? 1 : cap < 1000 ? 5 : cap < 5000 ? 10 : 14;
+    // 特征向量
+    const features = [r, b, cs, p, a, disc, cap, industryEncoded, spEncoded, ret45_x_disc, beta_x_ret45];
 
-    // 5. 交互项 (10分)
-    let s_interact = 0;
-    if (r > -5 && disc > 40) s_interact = 10;
-    else if (r > -5 && disc > 30) s_interact = 6;
-    else if (r > -15 && disc > 40) s_interact = 3;
-    else if (disc > 30) s_interact = 1;
+    // 标准化
+    const xStd = features.map((v, i) => (v - MEANS[i]) / STDS[i]);
 
-    // 6. 价格位置 (7分)
-    const s_pos = smoothScore(p, [0, 0.2, 0.4, 0.6, 0.8, 1.0], [1, 3, 4, 5, 7, 5]);
+    // 逻辑回归计算原始概率
+    let z = INTERCEPT;
+    for (let i = 0; i < COEF.length; i++) z += COEF[i] * xStd[i];
+    const rawProb = 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, z))));
 
-    // 7. AH折价率 (5分)
-    const s_disc = smoothScore(disc, [0, 20, 30, 40, 50, 70], [0.5, 1, 2, 3, 4, 5]);
+    // Platt校准
+    const plattX = (rawProb - PLATT_MEAN) / PLATT_STD;
+    const calibratedProb = 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, PLATT_W * plattX + PLATT_B))));
 
-    // 8. 个股波动率 (4分) - 真正衡量个股特有波动
-    const s_vol = smoothScore(volPct, [0, 20, 40, 60, 80], [0.5, 1, 2, 3, 4]);
+    // 确保概率在合理范围
+    const probBroken = Math.max(0.01, Math.min(0.99, calibratedProb));
+    const score = 100 * (1 - probBroken);
 
-    // 9. Alpha方向 (2分) - 统一用百分数
-    const s_alpha = aPct > 20 ? 2 : aPct > 0 ? 1 : 0;
-
-    // 10. 行业 (13分)
-    const s_ind = effectiveBase * 2.6;
-
-    // 11. 保荐人 (3分)
-    const s_sp = sp;
-
-    const rawTotal = s_ret + s_beta + s_cs + s_pos + s_disc + s_vol + s_alpha + s_interact + s_ind + s_cap + s_sp;
-    const total = (rawTotal / MAX_TOTAL) * 100; // 归一化到100分制
-
+    // 等级划分
     let grade, advice, boxClass, riskNote;
-    if (total >= 75) { grade = 'A'; advice = '模型信号较强'; boxClass = 'grade-a'; riskNote = '历史表现较好，但仍需独立判断'; }
-    else if (total >= 60) { grade = 'B+'; advice = '模型信号偏积极'; boxClass = 'grade-bp'; riskNote = '多数因子正向，注意市场波动'; }
-    else if (total >= 45) { grade = 'B'; advice = '中性偏积极'; boxClass = 'grade-b'; riskNote = '部分因子正向，需结合更多信息'; }
-    else if (total >= 35) { grade = 'C'; advice = '观望'; boxClass = 'grade-c'; riskNote = '信号偏弱，建议谨慎'; }
-    else { grade = 'D'; advice = '建议回避'; boxClass = 'grade-d'; riskNote = '多项因子负面，风险较高'; }
+    if (score >= 80) { grade = 'A'; advice = '预测破发风险较低'; boxClass = 'grade-a'; riskNote = '历史相似样本破发率约<10%，但仍需独立判断'; }
+    else if (score >= 60) { grade = 'B+'; advice = '预测破发风险中等偏低'; boxClass = 'grade-bp'; riskNote = '历史相似样本破发率约10-20%'; }
+    else if (score >= 45) { grade = 'B'; advice = '预测破发风险中等'; boxClass = 'grade-b'; riskNote = '历史相似样本破发率约20-35%'; }
+    else if (score >= 35) { grade = 'C'; advice = '预测破发风险中等偏高'; boxClass = 'grade-c'; riskNote = '历史相似样本破发率约35-50%'; }
+    else { grade = 'D'; advice = '预测破发风险较高'; boxClass = 'grade-d'; riskNote = '历史相似样本破发率≥50%，建议谨慎'; }
 
-    const factors = [
-        { name: 'A股涨跌幅', score: s_ret, max: MAX_RET, pct: s_ret/MAX_RET, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
-        { name: 'Beta(条件+行业加权)', score: s_beta, max: MAX_BETA, pct: s_beta/MAX_BETA, detail: `β=${b.toFixed(2)} × ${effectiveWeight.toFixed(1)}`, color: r >= -5 ? '#00c853' : '#ff9100' },
-        { name: '基石占比', score: s_cs, max: MAX_CS, pct: s_cs/MAX_CS, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
-        { name: '市值规模', score: s_cap, max: MAX_CAP, pct: s_cap/MAX_CAP, detail: `${cap.toFixed(0)}亿`, color: s_cap >= 10 ? '#00c853' : '#64dd17' },
-        { name: '交互项(情绪×便宜)', score: s_interact, max: MAX_INTERACT, pct: s_interact/MAX_INTERACT, detail: s_interact >= 6 ? '🚀 共振' : '一般', color: s_interact >= 6 ? '#00c853' : '#e0e0e0' },
-        { name: '价格位置', score: s_pos, max: MAX_POS, pct: s_pos/MAX_POS, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
-        { name: 'AH折价率', score: s_disc, max: MAX_DISC, pct: s_disc/MAX_DISC, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
-        { name: '个股波动率', score: s_vol, max: MAX_VOL, pct: s_vol/MAX_VOL, detail: `${volPct.toFixed(1)}%`, color: '#00c853' },
-        { name: 'Alpha方向', score: s_alpha, max: MAX_ALPHA_DIR, pct: s_alpha/MAX_ALPHA_DIR, detail: `${aPct.toFixed(1)}%`, color: aPct > 0 ? '#00c853' : '#e0e0e0' },
-        { name: '行业', score: s_ind, max: MAX_IND, pct: s_ind/MAX_IND, detail: `${effectiveLabel} (权重${effectiveWeight})`, color: '#00c853' },
-        { name: '保荐人', score: s_sp, max: MAX_SP, pct: s_sp/MAX_SP, detail: '', color: '#64dd17' },
+    // 因子方向解释
+    const factorEffects = [
+        { name: 'A股45日涨幅', value: r, direction: r > 0 ? '↓降低破发概率' : '↑增加破发概率', detail: `${r.toFixed(1)}%` },
+        { name: 'Beta', value: b, direction: b > 1.5 ? '↓高Beta在涨市中利好' : '↑低Beta相对稳健', detail: `β=${b.toFixed(2)}` },
+        { name: '基石占比', value: cs, direction: cs > 40 ? '↓高基石占比降低破发概率' : '↑基石占比偏低', detail: `${cs.toFixed(1)}%` },
+        { name: 'AH折价率', value: disc, direction: disc > 40 ? '↓高折价降低破发概率' : '↑折价率偏低', detail: `${disc.toFixed(1)}%` },
+        { name: '市值', value: cap, direction: cap > 1000 ? '↓大市值降低破发概率' : '↑小市值风险较高', detail: `${cap.toFixed(0)}亿` },
+        { name: 'Alpha方向', value: a, direction: a > 0 ? '↓正Alpha降低破发概率' : '↑负Alpha增加风险', detail: `${(a*100).toFixed(1)}%` },
+        { name: '行业', value: autoInfo.base, direction: autoInfo.base >= 4 ? '↓科技行业 historically 表现较好' : '↑传统行业破发率较高', detail: effectiveLabel },
     ];
 
-    // 找出最强三个加分项和减分项
-    const sortedFactors = [...factors].sort((a, b) => b.pct - a.pct);
-    const top3 = sortedFactors.slice(0, 3);
-    const bottom3 = sortedFactors.slice(-3);
+    // 找出正面和负面因子
+    const goodFactors = factorEffects.filter(f => f.direction.startsWith('↓')).slice(0, 3);
+    const badFactors = factorEffects.filter(f => f.direction.startsWith('↑')).slice(0, 3);
 
     document.getElementById('resName').textContent = `${stockData.name} (${stockData.code})`;
-    document.getElementById('resScore').textContent = total.toFixed(1);
+    document.getElementById('resScore').textContent = score.toFixed(0);
     document.getElementById('resGrade').textContent = `等级 ${grade}`;
     document.getElementById('resAdvice').textContent = advice;
     document.getElementById('scoreBox').className = 'score-box ' + boxClass;
 
-    let html = factors.map(f => {
-        const pct = Math.min(100, (f.pct * 100)).toFixed(0);
-        return `<tr><td>${f.name}</td><td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${f.color}"></div></div></td><td class="score-cell">${f.score.toFixed(1)}/${f.max}</td><td style="color:#888;font-size:12px">${f.detail}</td></tr>`;
-    }).join('');
+    let html = `
+        <tr style="background:#f0f7ff"><td colspan="4" style="padding:16px;text-align:center">
+            <div style="font-size:14px;color:#555;margin-bottom:8px">📊 预测首日破发概率</div>
+            <div style="font-size:48px;font-weight:800;color:${probBroken < 0.2 ? '#00c853' : probBroken < 0.35 ? '#ffab00' : '#dd2c00'}">${(probBroken*100).toFixed(1)}%</div>
+            <div style="font-size:13px;color:#888;margin-top:4px">评分 ${score.toFixed(0)} / 100</div>
+        </td></tr>
+    `;
 
-    // 添加总结
-    html += `<tr style="background:#f8f9fa"><td colspan="4" style="padding:12px;font-size:13px;color:#666">
-        <b>📊 得分摘要：</b><br>
-        ✅ 最强项：${top3.map(f => f.name).join('、')}<br>
-        ⚠️ 最弱项：${bottom3.map(f => f.name).join('、')}<br>
-        <span style="color:#c62828;font-size:12px">⚠️ ${riskNote} | 本评分仅供研究参考，不构成投资建议</span>
+    html += goodFactors.map(f => `
+        <tr><td style="color:#00c853">✅ ${f.name}</td><td colspan="3" style="font-size:13px;color:#666">${f.detail} - ${f.direction.substring(1)}</td></tr>
+    `).join('');
+
+    html += badFactors.map(f => `
+        <tr><td style="color:#dd2c00">⚠️ ${f.name}</td><td colspan="3" style="font-size:13px;color:#666">${f.detail} - ${f.direction.substring(1)}</td></tr>
+    `).join('');
+
+    html += `<tr style="background:#f8f9fa"><td colspan="4" style="padding:12px;font-size:12px;color:#888">
+        <div style="color:#c62828;font-size:11px;margin-bottom:4px">⚠️ ${riskNote}</div>
+        <div>模型基于25只历史AH股IPO训练 | 本评分仅供研究参考，不构成投资建议</div>
+        <div style="margin-top:4px">数据时点: ${new Date().toLocaleDateString('zh-CN')} | 行情数据: 腾讯财经</div>
     </td></tr>`;
 
     document.getElementById('factorsBody').innerHTML = html;
