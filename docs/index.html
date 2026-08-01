@@ -151,14 +151,14 @@
         </div>
         <div class="content">
             <div class="note">
-                💡 输入A股6位代码，点击「获取数据」自动拉取K线并计算Beta/Alpha/45日涨幅/价格位置。
-                然后输入AH折价率、基石占比等参数，点击「评分」。
+                💡 输入A股6位代码（支持主板/创业板/科创板），点击「获取数据」自动拉取K线并计算Beta/Alpha/45日涨幅/价格位置。
+                科创板代码以 <b>688</b> 开头。然后输入AH折价率、基石占比等参数，点击「评分」。
             </div>
 
             <div class="input-group full">
                 <div class="field">
                     <label>A股代码 (6位数字)</label>
-                    <input type="text" id="code" placeholder="例如: 300308" maxlength="6">
+                    <input type="text" id="code" placeholder="例如: 300308, 688506" maxlength="6">
                 </div>
             </div>
             <button class="btn" id="fetchBtn" onclick="fetchData()">📡 获取A股数据</button>
@@ -226,17 +226,19 @@ let stockData = {};
 // 腾讯K线API (CORS友好)
 async function fetchKlines(code) {
     const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
-    // 腾讯API: 不指定日期反而能返回更多数据
     const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tcode},day,,,120,qfq`;
     const res = await fetch(url);
     const json = await res.json();
 
     const data = json.data && json.data[tcode];
-    if (!data || !data.qfqday) throw new Error('无法获取K线数据');
+    if (!data) throw new Error('无法获取K线数据');
 
-    // 腾讯返回: [["2026-01-26", "开盘", "收盘", "最低", "最高", "成交量"], ...]
-    return data.qfqday.map(d => ({
-        date: d[0].replace(/-/g, ''), // "2026-01-26" → "20260126"
+    // 普通股票用 qfqday（前复权），科创板只有 day（不复权）
+    const klines = data.qfqday || data.day;
+    if (!klines || klines.length === 0) throw new Error('K线数据为空');
+
+    return klines.map(d => ({
+        date: d[0].replace(/-/g, ''),
         open: +d[1],
         close: +d[2],
         low: +d[3],
