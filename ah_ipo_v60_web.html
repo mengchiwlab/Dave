@@ -156,13 +156,13 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 AH股IPO评分系统 V6.1</h1>
-            <p>|Alpha| + IC权重优化 | 条件Beta | 行业加权 | 交互项</p>
+            <h1>📊 AH股IPO评分系统 V6.2</h1>
+            <p>100分归一化 | 真正个股波动率 | 市值修复 | 输入校验</p>
         </div>
         <div class="content">
             <div class="note">
-                💡 输入A股6位代码（支持主板/创业板/科创板<b>688</b>），自动计算Beta/Alpha/45日涨幅/价格位置。<br>
-                V6.1 更新：<b>|Alpha|个股波动</b> + <b>IC权重优化</b>（市值/涨幅/基石权重提升）
+                💡 输入A股6位代码（支持主板/创业板/科创板<b>688</b>），自动计算Beta/Alpha/45日涨幅/价格位置/个股波动率。<br>
+                <b>V6.2 修复</b>：市值单位修正、Alpha量纲统一、真正个股波动率（残差标准差）、100分归一化、输入校验、风险提示
             </div>
 
             <div class="input-group full">
@@ -195,15 +195,15 @@
                 </div>
                 <div class="field"><label>行业 <span class="tag tag-hot">影响Beta权重</span></label>
                     <select id="ind">
-                        <option value="半导体" data-weight="1.3" selected>半导体/芯片/AI</option>
-                        <option value="新能源" data-weight="1.2">新能源/光伏/储能</option>
-                        <option value="科技制造" data-weight="1.2">云计算/软件/通信</option>
-                        <option value="制造" data-weight="1.1">机器人/精密制造</option>
-                        <option value="医药" data-weight="1.0">创新药/医疗器械</option>
-                        <option value="新材料军工" data-weight="1.0">新材料/军工</option>
-                        <option value="消费" data-weight="0.8">食品饮料/消费</option>
-                        <option value="金融地产" data-weight="0.7">银行/保险/地产</option>
-                        <option value="周期" data-weight="0.7">化工/钢铁/纺织</option>
+                        <option value="5" data-weight="1.3" data-label="半导体" selected>半导体/芯片/AI</option>
+                        <option value="4" data-weight="1.2" data-label="新能源">新能源/光伏/储能</option>
+                        <option value="4" data-weight="1.2" data-label="科技制造">云计算/软件/通信</option>
+                        <option value="4" data-weight="1.1" data-label="制造">机器人/精密制造</option>
+                        <option value="4" data-weight="1.0" data-label="医药">创新药/医疗器械</option>
+                        <option value="3" data-weight="1.0" data-label="新材料军工">新材料/军工</option>
+                        <option value="2" data-weight="0.8" data-label="消费">食品饮料/消费</option>
+                        <option value="1" data-weight="0.7" data-label="金融地产">银行/保险/地产</option>
+                        <option value="1" data-weight="0.7" data-label="周期">化工/钢铁/纺织</option>
                     </select>
                 </div>
                 <div class="field"><label>Beta (自动计算)</label><input type="number" id="beta" step="0.01" readonly></div>
@@ -279,7 +279,7 @@ async function fetchStockInfo(code) {
     const parts = m[1].split('~');
     return {
         name: parts[1] || code,
-        cap: parts[44] ? parseFloat(parts[44]) / 1e4 : null,
+        cap: parts[44] ? parseFloat(parts[44]) : null,  // 腾讯API返回的市值已经是亿元
     };
 }
 
@@ -319,7 +319,7 @@ async function fetchData() {
 
         const high120 = Math.max(...closes);
         const low120 = Math.min(...closes);
-        const pos = (closes[closes.length - 1] - low120) / (high120 - low120);
+        const pos = high120 > low120 ? (closes[closes.length - 1] - low120) / (high120 - low120) : 0.5;
 
         const stockR = [], benchR = [];
         for (let i = 1; i < stockAligned.length; i++) {
@@ -328,17 +328,19 @@ async function fetchData() {
         }
         const beta = calcBeta(stockR, benchR);
         const alpha = calcAlpha(stockR, benchR, beta);
+        const idioVol = calcIdioVol(stockR, benchR, beta); // 真正个股波动率（残差标准差）
 
-        stockData = { code, name: info.name, ret45, pos, beta, alpha, cap: info.cap };
+        const indInfo = getIndustryInfo(info.name);
+        stockData = { code, name: info.name, ret45, pos, beta, alpha, idioVol, cap: info.cap, indInfo };
 
         document.getElementById('beta').value = beta.toFixed(2);
-        document.getElementById('alpha').value = alpha.toFixed(2);
+        document.getElementById('alpha').value = alpha.toFixed(4);
         document.getElementById('ret45').value = ret45.toFixed(2);
         document.getElementById('pos').value = pos.toFixed(4);
 
         const capStr = info.cap ? `${info.cap.toFixed(0)}亿` : 'N/A';
         document.getElementById('marketInfo').innerHTML =
-            `📈 ${info.name} (${code}) | α=${(alpha*100).toFixed(1)}% | β=${beta.toFixed(2)} | 45日=${ret45.toFixed(1)}% | 位置=${(pos*100).toFixed(0)}% | 市值=${capStr}`;
+            `📈 ${info.name} (${code}) | α=${(alpha*100).toFixed(1)}% | β=${beta.toFixed(2)} | 45日=${ret45.toFixed(1)}% | 位置=${(pos*100).toFixed(0)}% | 市值=${capStr} | 波动=${(idioVol*100).toFixed(1)}% | 行业=${indInfo.label}`;
         document.getElementById('marketInfo').style.display = 'block';
 
         document.getElementById('manualInputs').style.display = 'grid';
@@ -371,6 +373,20 @@ function calcAlpha(sr, br, beta) {
     const ms = sr.reduce((a,b) => a+b, 0) / n;
     const mb = br.reduce((a,b) => a+b, 0) / n;
     return (ms - beta * mb) * 252;
+}
+
+// 计算个股波动率（残差标准差，年化）- 真正衡量个股特有波动
+function calcIdioVol(sr, br, beta) {
+    const n = sr.length;
+    if (n < 2) return 0;
+    // 残差收益率 = 个股收益 - Beta × 市场收益
+    const residuals = [];
+    for (let i = 0; i < n; i++) {
+        residuals.push(sr[i] - beta * br[i]);
+    }
+    const m = residuals.reduce((a,b) => a+b, 0) / n;
+    const variance = residuals.reduce((sum, r) => sum + (r - m) ** 2, 0) / n;
+    return Math.sqrt(variance) * Math.sqrt(252); // 年化
 }
 
 // ========== V6.0 平滑评分 ==========
@@ -408,88 +424,115 @@ function getIndustryInfo(name) {
 function doScore() {
     if (!stockData.code) { showError('请先获取数据'); return; }
 
-    const r = stockData.ret45, b = stockData.beta, p = stockData.pos, a = stockData.alpha;
-    const disc = +document.getElementById('discount').value || 0;
-    const cs = +document.getElementById('cs').value || 0;
-    const sp = +document.getElementById('sp').value || 1;
-    const indSelect = document.getElementById('ind');
-    const indWeight = parseFloat(indSelect.options[indSelect.selectedIndex].dataset.weight) || 1.0;
-    const indBase = parseInt(indSelect.value) || 2;
+    // 输入校验
+    const disc = parseFloat(document.getElementById('discount').value);
+    const cs = parseFloat(document.getElementById('cs').value);
+    const sp = parseFloat(document.getElementById('sp').value);
+    if (isNaN(disc) || disc < 0 || disc > 100) { showError('AH折价率必须在 0-100% 之间'); return; }
+    if (isNaN(cs) || cs < 0 || cs > 100) { showError('基石占比必须在 0-100% 之间'); return; }
+
+    const r = stockData.ret45, b = stockData.beta, p = stockData.pos;
+    const a = stockData.alpha;       // 年化小数，如 0.10 = 10%
+    const aPct = a * 100;            // 转为百分数
+    const vol = stockData.idioVol;   // 个股波动率（年化小数）
+    const volPct = vol * 100;        // 转为百分数
     const cap = stockData.cap || 0;
 
-    const indInfo = getIndustryInfo(stockData.name);
-    const effectiveWeight = indWeight;
-    const effectiveBase = indInfo.base;
+    // 行业选择：优先使用用户手动选择，否则用自动识别
+    const indSelect = document.getElementById('ind');
+    const opt = indSelect.options[indSelect.selectedIndex];
+    const manualBase = parseInt(opt.value) || 2;
+    const manualWeight = parseFloat(opt.dataset.weight) || 1.0;
+    const manualLabel = opt.dataset.label || "其他";
+    const autoInfo = stockData.indInfo || { label: "其他", weight: 1.0, base: 2 };
 
-    // === V6.1 IC权重分配 ===
-    // 1. A股涨跌幅 (20分) - IC=0.581
-    const s_ret = smoothScore(r, [-30, -15, -5, 5, 15, 30], [2, 5, 10, 15, 20, 20]);
+    // 如果用户改了行业（从默认的半导体改了），用手动选择；否则用自动识别
+    const indChanged = indSelect.selectedIndex !== 0; // 默认第0项是半导体
+    const effectiveBase = indChanged ? manualBase : autoInfo.base;
+    const effectiveWeight = indChanged ? manualWeight : autoInfo.weight;
+    const effectiveLabel = indChanged ? manualLabel : autoInfo.label;
 
-    // 2. 条件Beta (18分) - IC=0.497
-    const betaBase = b > 2 ? 18 : b > 1.5 ? 14 : b > 1 ? 10 : b > 0.5 ? 5 : 2;
+    // === V6.2 修复版 - 归一化100分制 ===
+    // 各因子满分（合计100）
+    const MAX_RET = 18, MAX_BETA = 16, MAX_CS = 14, MAX_CAP = 14;
+    const MAX_INTERACT = 10, MAX_POS = 7, MAX_DISC = 5;
+    const MAX_VOL = 4, MAX_ALPHA_DIR = 2, MAX_IND = 13, MAX_SP = 3;
+    const MAX_TOTAL = MAX_RET + MAX_BETA + MAX_CS + MAX_CAP + MAX_INTERACT + MAX_POS + MAX_DISC + MAX_VOL + MAX_ALPHA_DIR + MAX_IND + MAX_SP; // = 102
+
+    // 1. A股涨跌幅 (18分)
+    const s_ret = smoothScore(r, [-30, -15, -5, 5, 15, 30], [1, 4, 8, 13, 18, 18]);
+
+    // 2. 条件Beta（行业加权）(16分)
+    const betaBase = b > 2 ? 16 : b > 1.5 ? 12 : b > 1 ? 8 : b > 0.5 ? 4 : 1;
     let direction = (r + 10) / 30;
     direction = Math.max(-0.5, Math.min(1.0, direction));
     let s_beta_raw;
     if (direction >= 0) {
         s_beta_raw = betaBase * direction;
     } else {
-        s_beta_raw = (18 - betaBase) * Math.abs(direction);
+        s_beta_raw = (16 - betaBase) * Math.abs(direction);
     }
-    const s_beta = Math.min(18, s_beta_raw * effectiveWeight);
+    const s_beta = Math.min(16, s_beta_raw * effectiveWeight);
 
-    // 3. 基石占比 (16分) - IC=0.545
-    const s_cs = smoothScore(cs, [0, 20, 30, 40, 50, 70], [1, 5, 8, 12, 16, 16]);
+    // 3. 基石占比 (14分)
+    const s_cs = smoothScore(cs, [0, 20, 30, 40, 50, 70], [1, 4, 7, 10, 14, 14]);
 
-    // 4. 市值 (16分) - IC=0.595
-    const s_cap = cap < 200 ? 2 : cap < 1000 ? 6 : cap < 5000 ? 10 : 16;
+    // 4. 市值 (14分) - 大市值加分
+    const s_cap = cap < 200 ? 1 : cap < 1000 ? 5 : cap < 5000 ? 10 : 14;
 
-    // 5. 交互项 (12分) - 高IC交互
+    // 5. 交互项 (10分)
     let s_interact = 0;
-    if (r > -5 && disc > 40) s_interact = 12;
-    else if (r > -5 && disc > 30) s_interact = 8;
-    else if (r > -15 && disc > 40) s_interact = 4;
+    if (r > -5 && disc > 40) s_interact = 10;
+    else if (r > -5 && disc > 30) s_interact = 6;
+    else if (r > -15 && disc > 40) s_interact = 3;
     else if (disc > 30) s_interact = 1;
 
-    // 6. 价格位置 (8分) - IC=0.242
-    const s_pos = smoothScore(p, [0, 0.2, 0.4, 0.6, 0.8, 1.0], [2, 4, 5, 6, 8, 6]);
+    // 6. 价格位置 (7分)
+    const s_pos = smoothScore(p, [0, 0.2, 0.4, 0.6, 0.8, 1.0], [1, 3, 4, 5, 7, 5]);
 
-    // 7. AH折价率 (5分) - IC=0.099
+    // 7. AH折价率 (5分)
     const s_disc = smoothScore(disc, [0, 20, 30, 40, 50, 70], [0.5, 1, 2, 3, 4, 5]);
 
-    // 8. |Alpha| (3分) - 新增
-    const s_abs_alpha = smoothScore(Math.abs(a), [0, 0.5, 1.0, 2.0, 3.0], [0.5, 1, 2, 3, 3]);
+    // 8. 个股波动率 (4分) - 真正衡量个股特有波动
+    const s_vol = smoothScore(volPct, [0, 20, 40, 60, 80], [0.5, 1, 2, 3, 4]);
 
-    // 9. Alpha方向 (1分) - 保留
-    const s_alpha = a > 1 ? 1 : a > 0 ? 0.5 : 0;
+    // 9. Alpha方向 (2分) - 统一用百分数
+    const s_alpha = aPct > 20 ? 2 : aPct > 0 ? 1 : 0;
 
-    // 10. 行业 (15分)
-    const s_ind = effectiveBase * 3.0;
+    // 10. 行业 (13分)
+    const s_ind = effectiveBase * 2.6;
 
-    // 11. 保荐人 (4分)
-    const s_sp = sp * 1.33;
+    // 11. 保荐人 (3分)
+    const s_sp = sp;
 
-    const total = s_ret + s_beta + s_cs + s_pos + s_disc + s_abs_alpha + s_alpha + s_interact + s_ind + s_cap + s_sp;
+    const rawTotal = s_ret + s_beta + s_cs + s_pos + s_disc + s_vol + s_alpha + s_interact + s_ind + s_cap + s_sp;
+    const total = (rawTotal / MAX_TOTAL) * 100; // 归一化到100分制
 
-    let grade, advice, boxClass;
-    if (total >= 80) { grade = 'A'; advice = '强烈推荐参与'; boxClass = 'grade-a'; }
-    else if (total >= 65) { grade = 'B+'; advice = '推荐参与'; boxClass = 'grade-bp'; }
-    else if (total >= 50) { grade = 'B'; advice = '中性偏积极'; boxClass = 'grade-b'; }
-    else if (total >= 40) { grade = 'C'; advice = '观望'; boxClass = 'grade-c'; }
-    else { grade = 'D'; advice = '建议回避'; boxClass = 'grade-d'; }
+    let grade, advice, boxClass, riskNote;
+    if (total >= 75) { grade = 'A'; advice = '模型信号较强'; boxClass = 'grade-a'; riskNote = '历史表现较好，但仍需独立判断'; }
+    else if (total >= 60) { grade = 'B+'; advice = '模型信号偏积极'; boxClass = 'grade-bp'; riskNote = '多数因子正向，注意市场波动'; }
+    else if (total >= 45) { grade = 'B'; advice = '中性偏积极'; boxClass = 'grade-b'; riskNote = '部分因子正向，需结合更多信息'; }
+    else if (total >= 35) { grade = 'C'; advice = '观望'; boxClass = 'grade-c'; riskNote = '信号偏弱，建议谨慎'; }
+    else { grade = 'D'; advice = '建议回避'; boxClass = 'grade-d'; riskNote = '多项因子负面，风险较高'; }
 
     const factors = [
-        { name: 'A股涨跌幅', score: s_ret, max: 20, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
-        { name: 'Beta(条件+行业加权)', score: s_beta, max: 18, detail: `β=${b.toFixed(2)} × ${effectiveWeight.toFixed(1)}`, color: r >= -5 ? '#00c853' : '#ff9100' },
-        { name: '基石占比', score: s_cs, max: 16, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
-        { name: '市值规模', score: s_cap, max: 16, detail: `${cap.toFixed(0)}亿`, color: s_cap >= 10 ? '#00c853' : '#64dd17' },
-        { name: '交互项(情绪×便宜)', score: s_interact, max: 12, detail: s_interact >= 8 ? '🚀 共振' : '一般', color: s_interact >= 8 ? '#00c853' : '#e0e0e0' },
-        { name: '价格位置', score: s_pos, max: 8, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
-        { name: 'AH折价率', score: s_disc, max: 5, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
-        { name: '|Alpha|(波动)', score: s_abs_alpha, max: 3, detail: `|α|=${Math.abs(a).toFixed(2)}`, color: '#00c853' },
-        { name: 'Alpha方向', score: s_alpha, max: 1, detail: `α=${(a*100).toFixed(1)}%`, color: a > 0 ? '#00c853' : '#e0e0e0' },
-        { name: '行业', score: s_ind, max: 15, detail: `${indInfo.label} (权重${effectiveWeight})`, color: '#00c853' },
-        { name: '保荐人', score: s_sp, max: 4, detail: '', color: '#64dd17' },
+        { name: 'A股涨跌幅', score: s_ret, max: MAX_RET, pct: s_ret/MAX_RET, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
+        { name: 'Beta(条件+行业加权)', score: s_beta, max: MAX_BETA, pct: s_beta/MAX_BETA, detail: `β=${b.toFixed(2)} × ${effectiveWeight.toFixed(1)}`, color: r >= -5 ? '#00c853' : '#ff9100' },
+        { name: '基石占比', score: s_cs, max: MAX_CS, pct: s_cs/MAX_CS, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
+        { name: '市值规模', score: s_cap, max: MAX_CAP, pct: s_cap/MAX_CAP, detail: `${cap.toFixed(0)}亿`, color: s_cap >= 10 ? '#00c853' : '#64dd17' },
+        { name: '交互项(情绪×便宜)', score: s_interact, max: MAX_INTERACT, pct: s_interact/MAX_INTERACT, detail: s_interact >= 6 ? '🚀 共振' : '一般', color: s_interact >= 6 ? '#00c853' : '#e0e0e0' },
+        { name: '价格位置', score: s_pos, max: MAX_POS, pct: s_pos/MAX_POS, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
+        { name: 'AH折价率', score: s_disc, max: MAX_DISC, pct: s_disc/MAX_DISC, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
+        { name: '个股波动率', score: s_vol, max: MAX_VOL, pct: s_vol/MAX_VOL, detail: `${volPct.toFixed(1)}%`, color: '#00c853' },
+        { name: 'Alpha方向', score: s_alpha, max: MAX_ALPHA_DIR, pct: s_alpha/MAX_ALPHA_DIR, detail: `${aPct.toFixed(1)}%`, color: aPct > 0 ? '#00c853' : '#e0e0e0' },
+        { name: '行业', score: s_ind, max: MAX_IND, pct: s_ind/MAX_IND, detail: `${effectiveLabel} (权重${effectiveWeight})`, color: '#00c853' },
+        { name: '保荐人', score: s_sp, max: MAX_SP, pct: s_sp/MAX_SP, detail: '', color: '#64dd17' },
     ];
+
+    // 找出最强三个加分项和减分项
+    const sortedFactors = [...factors].sort((a, b) => b.pct - a.pct);
+    const top3 = sortedFactors.slice(0, 3);
+    const bottom3 = sortedFactors.slice(-3);
 
     document.getElementById('resName').textContent = `${stockData.name} (${stockData.code})`;
     document.getElementById('resScore').textContent = total.toFixed(1);
@@ -497,11 +540,20 @@ function doScore() {
     document.getElementById('resAdvice').textContent = advice;
     document.getElementById('scoreBox').className = 'score-box ' + boxClass;
 
-    document.getElementById('factorsBody').innerHTML = factors.map(f => {
-        const pct = Math.min(100, (f.score / f.max * 100)).toFixed(0);
+    let html = factors.map(f => {
+        const pct = Math.min(100, (f.pct * 100)).toFixed(0);
         return `<tr><td>${f.name}</td><td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${f.color}"></div></div></td><td class="score-cell">${f.score.toFixed(1)}/${f.max}</td><td style="color:#888;font-size:12px">${f.detail}</td></tr>`;
     }).join('');
 
+    // 添加总结
+    html += `<tr style="background:#f8f9fa"><td colspan="4" style="padding:12px;font-size:13px;color:#666">
+        <b>📊 得分摘要：</b><br>
+        ✅ 最强项：${top3.map(f => f.name).join('、')}<br>
+        ⚠️ 最弱项：${bottom3.map(f => f.name).join('、')}<br>
+        <span style="color:#c62828;font-size:12px">⚠️ ${riskNote} | 本评分仅供研究参考，不构成投资建议</span>
+    </td></tr>`;
+
+    document.getElementById('factorsBody').innerHTML = html;
     document.getElementById('result').style.display = 'block';
 }
 
