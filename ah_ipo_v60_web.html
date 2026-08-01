@@ -156,13 +156,13 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 AH股IPO评分系统 V6.0</h1>
-            <p>条件Beta | 行业加权 | 交互项 | 平滑评分 | 大市值偏好</p>
+            <h1>📊 AH股IPO评分系统 V6.1</h1>
+            <p>|Alpha| + IC权重优化 | 条件Beta | 行业加权 | 交互项</p>
         </div>
         <div class="content">
             <div class="note">
                 💡 输入A股6位代码（支持主板/创业板/科创板<b>688</b>），自动计算Beta/Alpha/45日涨幅/价格位置。<br>
-                V6.0 新增：<b>交互项</b>（A股涨+高折价=超级利好）、<b>行业Beta加权</b>、<b>大市值加分</b>、<b>平滑评分</b>
+                V6.1 更新：<b>|Alpha|个股波动</b> + <b>IC权重优化</b>（市值/涨幅/基石权重提升）
             </div>
 
             <div class="input-group full">
@@ -417,55 +417,58 @@ function doScore() {
     const indBase = parseInt(indSelect.value) || 2;
     const cap = stockData.cap || 0;
 
-    // 行业信息（自动检测或手动选择）
     const indInfo = getIndustryInfo(stockData.name);
     const effectiveWeight = indWeight;
     const effectiveBase = indInfo.base;
 
-    // 1. 平滑连续的A股涨跌幅 (15分)
-    const s_ret = smoothScore(r, [-30, -15, -5, 5, 15, 30], [1, 4, 8, 12, 15, 15]);
+    // === V6.1 IC权重分配 ===
+    // 1. A股涨跌幅 (20分) - IC=0.581
+    const s_ret = smoothScore(r, [-30, -15, -5, 5, 15, 30], [2, 5, 10, 15, 20, 20]);
 
-    // 2. 条件Beta（行业加权）(21分封顶)
-    const betaBase = b > 2 ? 21 : b > 1.5 ? 16 : b > 1 ? 11 : b > 0.5 ? 6 : 3;
+    // 2. 条件Beta (18分) - IC=0.497
+    const betaBase = b > 2 ? 18 : b > 1.5 ? 14 : b > 1 ? 10 : b > 0.5 ? 5 : 2;
     let direction = (r + 10) / 30;
     direction = Math.max(-0.5, Math.min(1.0, direction));
     let s_beta_raw;
     if (direction >= 0) {
         s_beta_raw = betaBase * direction;
     } else {
-        s_beta_raw = (21 - betaBase) * Math.abs(direction);
+        s_beta_raw = (18 - betaBase) * Math.abs(direction);
     }
-    const s_beta = Math.min(21, s_beta_raw * effectiveWeight);
+    const s_beta = Math.min(18, s_beta_raw * effectiveWeight);
 
-    // 3. 基石占比 (13分)
-    const s_cs = smoothScore(cs, [0, 20, 30, 40, 50, 70], [1, 4, 7, 10, 13, 13]);
+    // 3. 基石占比 (16分) - IC=0.545
+    const s_cs = smoothScore(cs, [0, 20, 30, 40, 50, 70], [1, 5, 8, 12, 16, 16]);
 
-    // 4. 价格位置 (10分)
-    const s_pos = smoothScore(p, [0, 0.2, 0.4, 0.6, 0.8, 1.0], [2, 4, 6, 8, 10, 8]);
+    // 4. 市值 (16分) - IC=0.595
+    const s_cap = cap < 200 ? 2 : cap < 1000 ? 6 : cap < 5000 ? 10 : 16;
 
-    // 5. 个股波动 = |Alpha| (3分)
-    const s_vol = smoothScore(Math.abs(a), [0, 0.5, 1.0, 2.0, 3.0], [0.5, 1, 2, 3, 3]);
-
-    // 6. AH折价率 (10分)
-    const s_disc = smoothScore(disc, [0, 20, 30, 40, 50, 70], [0.5, 2, 4, 6, 8, 10]);
-
-    // 7. 交互项：ret45 × 折价率 (8分)
+    // 5. 交互项 (12分) - 高IC交互
     let s_interact = 0;
-    if (r > -5 && disc > 40) s_interact = 8;
-    else if (r > -5 && disc > 30) s_interact = 5;
-    else if (r > -15 && disc > 40) s_interact = 3;
+    if (r > -5 && disc > 40) s_interact = 12;
+    else if (r > -5 && disc > 30) s_interact = 8;
+    else if (r > -15 && disc > 40) s_interact = 4;
     else if (disc > 30) s_interact = 1;
 
-    // 8. 行业 (15分)
+    // 6. 价格位置 (8分) - IC=0.242
+    const s_pos = smoothScore(p, [0, 0.2, 0.4, 0.6, 0.8, 1.0], [2, 4, 5, 6, 8, 6]);
+
+    // 7. AH折价率 (5分) - IC=0.099
+    const s_disc = smoothScore(disc, [0, 20, 30, 40, 50, 70], [0.5, 1, 2, 3, 4, 5]);
+
+    // 8. |Alpha| (3分) - 新增
+    const s_abs_alpha = smoothScore(Math.abs(a), [0, 0.5, 1.0, 2.0, 3.0], [0.5, 1, 2, 3, 3]);
+
+    // 9. Alpha方向 (1分) - 保留
+    const s_alpha = a > 1 ? 1 : a > 0 ? 0.5 : 0;
+
+    // 10. 行业 (15分)
     const s_ind = effectiveBase * 3.0;
 
-    // 9. 市值（反向：大市值加分）(5分)
-    const s_cap = cap < 200 ? 1 : cap < 1000 ? 3 : cap < 5000 ? 4 : 5;
-
-    // 10. 保荐人 (4分)
+    // 11. 保荐人 (4分)
     const s_sp = sp * 1.33;
 
-    const total = s_ret + s_beta + s_cs + s_pos + s_vol + s_disc + s_interact + s_ind + s_cap + s_sp;
+    const total = s_ret + s_beta + s_cs + s_pos + s_disc + s_abs_alpha + s_alpha + s_interact + s_ind + s_cap + s_sp;
 
     let grade, advice, boxClass;
     if (total >= 80) { grade = 'A'; advice = '强烈推荐参与'; boxClass = 'grade-a'; }
@@ -475,15 +478,16 @@ function doScore() {
     else { grade = 'D'; advice = '建议回避'; boxClass = 'grade-d'; }
 
     const factors = [
-        { name: 'A股涨跌幅', score: s_ret, max: 15, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
-        { name: 'Beta(条件+行业加权)', score: s_beta, max: 21, detail: `β=${b.toFixed(2)} × ${effectiveWeight.toFixed(1)}`, color: r >= -5 ? '#00c853' : '#ff9100' },
-        { name: '基石占比', score: s_cs, max: 13, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
-        { name: '价格位置', score: s_pos, max: 10, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
-        { name: '个股波动(|Alpha|)', score: s_vol, max: 3, detail: `|α|=${Math.abs(a).toFixed(2)}`, color: '#00c853' },
-        { name: 'AH折价率', score: s_disc, max: 10, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
-        { name: '交互项(情绪×便宜)', score: s_interact, max: 8, detail: s_interact >= 5 ? '🚀 共振' : '一般', color: s_interact >= 5 ? '#00c853' : '#e0e0e0' },
+        { name: 'A股涨跌幅', score: s_ret, max: 20, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
+        { name: 'Beta(条件+行业加权)', score: s_beta, max: 18, detail: `β=${b.toFixed(2)} × ${effectiveWeight.toFixed(1)}`, color: r >= -5 ? '#00c853' : '#ff9100' },
+        { name: '基石占比', score: s_cs, max: 16, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
+        { name: '市值规模', score: s_cap, max: 16, detail: `${cap.toFixed(0)}亿`, color: s_cap >= 10 ? '#00c853' : '#64dd17' },
+        { name: '交互项(情绪×便宜)', score: s_interact, max: 12, detail: s_interact >= 8 ? '🚀 共振' : '一般', color: s_interact >= 8 ? '#00c853' : '#e0e0e0' },
+        { name: '价格位置', score: s_pos, max: 8, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
+        { name: 'AH折价率', score: s_disc, max: 5, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
+        { name: '|Alpha|(波动)', score: s_abs_alpha, max: 3, detail: `|α|=${Math.abs(a).toFixed(2)}`, color: '#00c853' },
+        { name: 'Alpha方向', score: s_alpha, max: 1, detail: `α=${(a*100).toFixed(1)}%`, color: a > 0 ? '#00c853' : '#e0e0e0' },
         { name: '行业', score: s_ind, max: 15, detail: `${indInfo.label} (权重${effectiveWeight})`, color: '#00c853' },
-        { name: '市值规模', score: s_cap, max: 5, detail: `${cap.toFixed(0)}亿`, color: s_cap >= 4 ? '#00c853' : '#64dd17' },
         { name: '保荐人', score: s_sp, max: 4, detail: '', color: '#64dd17' },
     ];
 
