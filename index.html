@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 AH股IPO评分系统 V6.0</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { color: #aaa; font-size: 14px; }
+        .content { padding: 30px; }
+        .note {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .input-group.full { grid-template-columns: 1fr; }
+        .field {
+            display: flex;
+            flex-direction: column;
+        }
+        .field label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        .field input, .field select {
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .field input:focus, .field select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .field input[readonly] {
+            background: #f5f5f5;
+            color: #666;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102,126,234,0.4); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        .spinner {
+            display: inline-block;
+            width: 24px; height: 24px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .result { margin-top: 25px; display: none; }
+        .score-box {
+            color: white;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .score-box.grade-a { background: linear-gradient(135deg, #00c853, #64dd17); }
+        .score-box.grade-bp { background: linear-gradient(135deg, #64dd17, #aeea00); }
+        .score-box.grade-b { background: linear-gradient(135deg, #ffab00, #ffd600); }
+        .score-box.grade-c { background: linear-gradient(135deg, #ff6d00, #ff9100); }
+        .score-box.grade-d { background: linear-gradient(135deg, #dd2c00, #ff3d00); }
+        .score-num { font-size: 72px; font-weight: 800; line-height: 1; }
+        .score-grade { font-size: 32px; font-weight: 700; margin-top: 5px; }
+        .score-advice { font-size: 18px; margin-top: 8px; opacity: 0.95; }
+        .stock-name { font-size: 14px; opacity: 0.8; margin-bottom: 10px; }
+        .factors-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .factors-table th {
+            background: #f5f5f5;
+            padding: 12px; text-align: left;
+            font-size: 13px; color: #666; font-weight: 600;
+        }
+        .factors-table td { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+        .factors-table tr:hover { background: #fafafa; }
+        .progress-bar {
+            background: #e0e0e0; border-radius: 4px; height: 18px;
+            overflow: hidden; min-width: 120px;
+        }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .score-cell { font-weight: 700; text-align: center; }
+        .market-info {
+            background: #f8f9fa; border-radius: 10px;
+            padding: 15px; margin-bottom: 20px;
+            font-size: 13px; color: #666;
+        }
+        .error {
+            background: #ffebee; color: #c62828;
+            padding: 12px; border-radius: 8px;
+            margin-top: 10px; font-size: 14px;
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+        .tag-new { background: #e3f2fd; color: #1565c0; }
+        .tag-hot { background: #fce4ec; color: #c62828; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 AH股IPO评分系统 V6.4</h1>
+            <p>成熟系数模型 | 参考专业产品设计 | 仅供参考</p>
+        </div>
+        <div class="content">
+            <div class="note">
+                💡 输入A股6位代码（支持主板/创业板/科创板<b>688</b>），自动计算Beta/Alpha/45日涨幅/价格位置/个股波动率。<br>
+                <b>V6.2 修复</b>：市值单位修正、Alpha量纲统一、真正个股波动率（残差标准差）、100分归一化、输入校验、风险提示
+            </div>
+
+            <div class="input-group full">
+                <div class="field">
+                    <label>A股代码 (6位数字)</label>
+                    <input type="text" id="code" placeholder="例如: 300308, 688506" maxlength="6">
+                </div>
+            </div>
+            <button class="btn" id="fetchBtn" onclick="fetchData()">📡 获取A股数据</button>
+
+            <div id="loading" class="loading" style="display:none;">
+                <div class="spinner"></div> 正在获取K线数据并计算指标...
+            </div>
+            <div id="error"></div>
+
+            <div id="marketInfo" class="market-info" style="display:none;"></div>
+
+            <div class="input-group" id="manualInputs" style="display:none;">
+                <div class="field"><label>AH折价率 (%)</label><input type="number" id="discount" value="30" step="1"></div>
+                <div class="field"><label>基石占比 (%)</label><input type="number" id="cs" value="40" step="1"></div>
+                <div class="field"><label>保荐人</label>
+                    <select id="sp">
+                        <option value="3">高盛</option><option value="3">摩根士丹利</option>
+                        <option value="3" selected>中金</option><option value="3">中信证券</option>
+                        <option value="2">华泰</option><option value="2">海通</option>
+                        <option value="1.5">中信建投</option><option value="1.5">国泰君安</option>
+                        <option value="1">招银</option><option value="1">农银</option>
+                        <option value="1">其他中资</option><option value="0.5">小型券商</option>
+                    </select>
+                </div>
+                <div class="field"><label>行业 <span class="tag tag-hot">影响Beta权重</span></label>
+                    <select id="ind">
+                        <option value="5" data-weight="1.3" data-label="半导体" selected>半导体/芯片/AI</option>
+                        <option value="4" data-weight="1.2" data-label="新能源">新能源/光伏/储能</option>
+                        <option value="4" data-weight="1.2" data-label="科技制造">云计算/软件/通信</option>
+                        <option value="4" data-weight="1.1" data-label="制造">机器人/精密制造</option>
+                        <option value="4" data-weight="1.0" data-label="医药">创新药/医疗器械</option>
+                        <option value="3" data-weight="1.0" data-label="新材料军工">新材料/军工</option>
+                        <option value="2" data-weight="0.8" data-label="消费">食品饮料/消费</option>
+                        <option value="1" data-weight="0.7" data-label="金融地产">银行/保险/地产</option>
+                        <option value="1" data-weight="0.7" data-label="周期">化工/钢铁/纺织</option>
+                    </select>
+                </div>
+                <div class="field"><label>Beta (自动计算)</label><input type="number" id="beta" step="0.01" readonly></div>
+                <div class="field"><label>Alpha (自动计算)</label><input type="number" id="alpha" step="0.01" readonly></div>
+                <div class="field"><label>A股45日涨幅% (自动计算)</label><input type="number" id="ret45" step="0.01" readonly></div>
+                <div class="field"><label>价格位置 (自动计算)</label><input type="number" id="pos" step="0.0001" readonly></div>
+            </div>
+
+            <button class="btn" id="scoreBtn" onclick="doScore()" style="display:none;">🚀 开始评分</button>
+
+            <div id="result" class="result">
+                <div id="scoreBox" class="score-box">
+                    <div class="stock-name" id="resName"></div>
+                    <div class="score-num" id="resScore">0</div>
+                    <div class="score-grade" id="resGrade">-</div>
+                    <div class="score-advice" id="resAdvice">-</div>
+                </div>
+                <table class="factors-table">
+                    <thead><tr><th>因子</th><th style="width:35%">得分率</th><th style="text-align:center">分数</th><th>详情</th></tr></thead>
+                    <tbody id="factorsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+let stockData = {};
+
+// ========== 腾讯K线API ==========
+async function fetchKlines(code) {
+    const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
+    const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tcode},day,,,120,qfq`;
+    const res = await fetch(url);
+    const json = await res.json();
+
+    const data = json.data && json.data[tcode];
+    if (!data) throw new Error('无法获取K线数据');
+
+    const klines = data.qfqday || data.day;
+    if (!klines || klines.length === 0) throw new Error('K线数据为空');
+
+    return klines.map(d => ({
+        date: d[0].replace(/-/g, ''),
+        open: +d[1],
+        close: +d[2],
+        low: +d[3],
+        high: +d[4],
+    }));
+}
+
+async function fetchBenchKlines() {
+    const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000300,day,,,120,qfq`;
+    const res = await fetch(url);
+    const json = await res.json();
+
+    const data = json.data && json.data['sh000300'];
+    const klines = data && (data.qfqday || data.day);
+    if (!klines) throw new Error('无法获取沪深300数据');
+
+    return klines.map(d => ({
+        date: d[0].replace(/-/g, ''),
+        close: +d[2],
+    }));
+}
+
+async function fetchStockInfo(code) {
+    const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
+    const res = await fetch(`https://qt.gtimg.cn/q=${tcode}`);
+    const text = await res.text();
+    const m = text.match(/v_[^=]+="([^"]+)"/);
+    if (!m) return { name: code, cap: null };
+
+    const parts = m[1].split('~');
+    return {
+        name: parts[1] || code,
+        cap: parts[44] ? parseFloat(parts[44]) : null,  // 腾讯API返回的市值已经是亿元
+    };
+}
+
+async function fetchData() {
+    const code = document.getElementById('code').value.trim();
+    if (!/^\d{6}$/.test(code)) {
+        showError('请输入6位数字的股票代码');
+        return;
+    }
+
+    document.getElementById('fetchBtn').disabled = true;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('error').innerHTML = '';
+
+    try {
+        const [klines, benchKlines, info] = await Promise.all([
+            fetchKlines(code),
+            fetchBenchKlines(),
+            fetchStockInfo(code),
+        ]);
+
+        if (klines.length < 45) throw new Error('K线数据不足45天');
+
+        const stockMap = new Map(klines.map(d => [d.date, d]));
+        const benchMap = new Map(benchKlines.map(d => [d.date, d]));
+        const dates = klines.map(d => d.date).filter(d => benchMap.has(d));
+        dates.sort();
+
+        const stockAligned = dates.map(d => stockMap.get(d));
+        const benchAligned = dates.map(d => benchMap.get(d));
+        const closes = stockAligned.map(d => d.close);
+        const benchCloses = benchAligned.map(d => d.close);
+
+        const ret45 = closes.length >= 46
+            ? (closes[closes.length - 1] - closes[closes.length - 46]) / closes[closes.length - 46] * 100
+            : (closes[closes.length - 1] - closes[0]) / closes[0] * 100;
+
+        const high120 = Math.max(...closes);
+        const low120 = Math.min(...closes);
+        const pos = high120 > low120 ? (closes[closes.length - 1] - low120) / (high120 - low120) : 0.5;
+
+        const stockR = [], benchR = [];
+        for (let i = 1; i < stockAligned.length; i++) {
+            stockR.push((closes[i] - closes[i-1]) / closes[i-1]);
+            benchR.push((benchCloses[i] - benchCloses[i-1]) / benchCloses[i-1]);
+        }
+        const beta = calcBeta(stockR, benchR);
+        const alpha = calcAlpha(stockR, benchR, beta);
+        const idioVol = calcIdioVol(stockR, benchR, beta); // 真正个股波动率（残差标准差）
+
+        const indInfo = getIndustryInfo(info.name);
+        stockData = { code, name: info.name, ret45, pos, beta, alpha, idioVol, cap: info.cap, indInfo };
+
+        document.getElementById('beta').value = beta.toFixed(2);
+        document.getElementById('alpha').value = alpha.toFixed(4);
+        document.getElementById('ret45').value = ret45.toFixed(2);
+        document.getElementById('pos').value = pos.toFixed(4);
+
+        const capStr = info.cap ? `${info.cap.toFixed(0)}亿` : 'N/A';
+        document.getElementById('marketInfo').innerHTML =
+            `📈 ${info.name} (${code}) | α=${(alpha*100).toFixed(1)}% | β=${beta.toFixed(2)} | 45日=${ret45.toFixed(1)}% | 位置=${(pos*100).toFixed(0)}% | 市值=${capStr} | 波动=${(idioVol*100).toFixed(1)}% | 行业=${indInfo.label}`;
+        document.getElementById('marketInfo').style.display = 'block';
+
+        document.getElementById('manualInputs').style.display = 'grid';
+        document.getElementById('scoreBtn').style.display = 'block';
+
+    } catch (e) {
+        showError('获取数据失败: ' + e.message);
+    } finally {
+        document.getElementById('fetchBtn').disabled = false;
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+function calcBeta(sr, br) {
+    const n = sr.length;
+    if (n < 2) return 1;
+    const ms = sr.reduce((a,b) => a+b, 0) / n;
+    const mb = br.reduce((a,b) => a+b, 0) / n;
+    let cov = 0, vr = 0;
+    for (let i = 0; i < n; i++) {
+        cov += (sr[i] - ms) * (br[i] - mb);
+        vr += (br[i] - mb) ** 2;
+    }
+    return vr > 0 ? (cov/n) / (vr/n) : 1;
+}
+
+function calcAlpha(sr, br, beta) {
+    const n = sr.length;
+    if (n < 2) return 0;
+    const ms = sr.reduce((a,b) => a+b, 0) / n;
+    const mb = br.reduce((a,b) => a+b, 0) / n;
+    return (ms - beta * mb) * 252;
+}
+
+// 计算个股波动率（残差标准差，年化）- 真正衡量个股特有波动
+function calcIdioVol(sr, br, beta) {
+    const n = sr.length;
+    if (n < 2) return 0;
+    // 残差收益率 = 个股收益 - Beta × 市场收益
+    const residuals = [];
+    for (let i = 0; i < n; i++) {
+        residuals.push(sr[i] - beta * br[i]);
+    }
+    const m = residuals.reduce((a,b) => a+b, 0) / n;
+    const variance = residuals.reduce((sum, r) => sum + (r - m) ** 2, 0) / n;
+    return Math.sqrt(variance) * Math.sqrt(252); // 年化
+}
+
+// ========== V6.0 平滑评分 ==========
+function smoothScore(value, thresholds, scores) {
+    if (value <= thresholds[0]) return scores[0];
+    if (value >= thresholds[thresholds.length - 1]) return scores[scores.length - 1];
+    for (let i = 0; i < thresholds.length - 1; i++) {
+        if (thresholds[i] <= value && value <= thresholds[i + 1]) {
+            const t = (value - thresholds[i]) / (thresholds[i + 1] - thresholds[i]);
+            return scores[i] + t * (scores[i + 1] - scores[i]);
+        }
+    }
+    return scores[scores.length - 1];
+}
+
+// ========== 行业映射 + Beta权重 ==========
+function getIndustryInfo(name) {
+    const patterns = {
+        "半导体|芯片|集成|微装|澜起|兆易|纳芯|豪威|国民|芯基|芯碁|峰岹": { label: "半导体", weight: 1.3, base: 5 },
+        "新能源|光伏|储能|宁德|钧达|大金重工|天岳|先导": { label: "新能源", weight: 1.2, base: 4 },
+        "软件|通信|科技|剑桥|广和通|美格智能|龙旗|华勤|立讯|蓝思|三一|大族": { label: "科技制造", weight: 1.2, base: 4 },
+        "机器人|精密|制造|埃斯顿|兆威|三环|鼎泰|广合|胜宏|牧原": { label: "制造", weight: 1.1, base: 4 },
+        "医药|医疗|生物|恒瑞|可孚|迈威": { label: "医药", weight: 1.0, base: 4 },
+        "新材料|军工|国恩|沃尔|吉宏|赤峰": { label: "新材料军工", weight: 1.0, base: 3 },
+        "饮料|食品|消费|安井|东鹏|海天": { label: "消费", weight: 0.8, base: 2 },
+        "银行|保险|地产|期货": { label: "金融地产", weight: 0.7, base: 1 },
+        "化工|钢铁|纺织|滨化": { label: "周期", weight: 0.7, base: 1 },
+    };
+    for (const [p, info] of Object.entries(patterns)) {
+        if (p.split("|").some(k => name.includes(k))) return info;
+    }
+    return { label: "其他", weight: 1.0, base: 2 };
+}
+
+function doScore() {
+    if (!stockData.code) { showError('请先获取数据'); return; }
+
+    const disc = parseFloat(document.getElementById('discount').value);
+    const cs = parseFloat(document.getElementById('cs').value);
+    const sp = parseFloat(document.getElementById('sp').value);
+    if (isNaN(disc) || disc < 0 || disc > 100) { showError('AH折价率必须在 0-100% 之间'); return; }
+    if (isNaN(cs) || cs < 0 || cs > 100) { showError('基石占比必须在 0-100% 之间'); return; }
+
+    const r = stockData.ret45, b = stockData.beta, p = stockData.pos;
+    const a = stockData.alpha;
+    const vol = stockData.idioVol;
+    const cap = stockData.cap || 0;
+
+    const indSelect = document.getElementById('ind');
+    const opt = indSelect.options[indSelect.selectedIndex];
+    const autoInfo = stockData.indInfo || { label: "其他", weight: 1.0, base: 2 };
+    const indChanged = indSelect.selectedIndex !== 0;
+    const effectiveLabel = indChanged ? opt.dataset.label : autoInfo.label;
+    const effectiveBase = indChanged ? parseInt(opt.value) : autoInfo.base;
+
+    // === V6.4 成熟系数模型 ===
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function sigmoid(z) { return 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, z)))); }
+
+    const definitions = [
+        { key: 'discount', label: 'AH折价率', coef: -0.42, trans: v => (v - 20) / 15, fmt: v => `${v.toFixed(1)}%` },
+        { key: 'ret45', label: 'A股45日走势', coef: -0.31, trans: v => v / 15, fmt: v => `${v.toFixed(1)}%` },
+        { key: 'volatility', label: '残差年化波动率', coef: 0.34, trans: v => (v - 30) / 15, fmt: v => `${v.toFixed(1)}%` },
+        { key: 'beta', label: '市场Beta', coef: 0.18, trans: v => v - 1, fmt: v => v.toFixed(2) },
+        { key: 'position', label: 'A股价格位置', coef: 0.17, trans: v => (v*100 - 50) / 30, fmt: v => `${(v*100).toFixed(1)}%` },
+        { key: 'cornerstone', label: '基石占比', coef: -0.24, trans: v => (v - 25) / 20, fmt: v => `${v.toFixed(1)}%` },
+        { key: 'marketCap', label: '预计上市市值', coef: -0.20, trans: v => Math.log(Math.max(v, 10) / 100), fmt: v => `${v.toFixed(0)}亿港元` },
+        { key: 'alpha', label: '年化Alpha', coef: -0.10, trans: v => v*100 / 12, fmt: v => `${(v*100).toFixed(1)}%` },
+    ];
+
+    const values = {
+        ret45: r, position: p, beta: b, volatility: vol*100,
+        alpha: a, discount: disc, cornerstone: cs, marketCap: cap,
+    };
+
+    let logit = -0.18;
+    const features = [];
+
+    for (const def of definitions) {
+        const v = values[def.key];
+        if (v === null || !Number.isFinite(v)) continue;
+        const t = clamp(def.trans(v), -2.5, 2.5);
+        const contrib = def.coef * t;
+        logit += contrib;
+        features.push({
+            label: def.label, contribution: contrib, value: v,
+            detail: def.fmt(v), coef: def.coef
+        });
+    }
+
+    // 行业和保荐人
+    const industryMap = { 5: -0.30, 4: -0.15, 3: 0.10, 2: 0.25, 1: 0.40 };
+    const sponsorMap = { 3: -0.15, 2: 0.05, 1.5: 0.10, 1: 0.15, 0.5: 0.25 };
+    const indContrib = industryMap[effectiveBase] || 0.20;
+    const spContrib = sponsorMap[sp] || 0.15;
+    logit += indContrib + spContrib;
+
+    features.push({ label: '行业历史风险', contribution: indContrib, value: null, detail: effectiveLabel });
+    features.push({ label: '保荐人历史风险', contribution: spContrib, value: null, detail: '' });
+
+    const rawProb = sigmoid(logit);
+    const probability = Math.max(0.03, Math.min(0.92, rawProb));
+    const score = 100 * (1 - probability);
+
+    let grade, advice, boxClass, riskNote;
+    if (probability < 0.10) {
+        grade = 'A'; advice = '模型预测破发风险很低'; boxClass = 'grade-a'; riskNote = '多数保护性因子占优，但仍需独立判断';
+    } else if (probability < 0.20) {
+        grade = 'B+'; advice = '模型预测破发风险较低'; boxClass = 'grade-bp'; riskNote = '保护性因子较好，注意市场波动';
+    } else if (probability < 0.35) {
+        grade = 'B'; advice = '模型预测存在一定破发风险'; boxClass = 'grade-b'; riskNote = '多空因子交织，需结合更多信息';
+    } else if (probability < 0.50) {
+        grade = 'C'; advice = '模型预测破发风险偏高'; boxClass = 'grade-c'; riskNote = '风险因子占优，建议谨慎';
+    } else {
+        grade = 'D'; advice = '模型预测破发风险较高'; boxClass = 'grade-d'; riskNote = '多项风险因子显著，建议回避或极小仓位';
+    }
+
+    // 分类正面/负面因子
+    const protective = features.filter(f => f.contribution < 0).sort((a, b) => a.contribution - b.contribution).slice(0, 3);
+    const risky = features.filter(f => f.contribution > 0).sort((a, b) => b.contribution - a.contribution).slice(0, 3);
+
+    document.getElementById('resName').textContent = `${stockData.name} (${stockData.code})`;
+    document.getElementById('resScore').textContent = score.toFixed(0);
+    document.getElementById('resGrade').textContent = `等级 ${grade}`;
+    document.getElementById('resAdvice').textContent = advice;
+    document.getElementById('scoreBox').className = 'score-box ' + boxClass;
+
+    // 顶部概率展示
+    let html = `
+        <tr style="background:#f0f7ff"><td colspan="4" style="padding:16px;text-align:center">
+            <div style="font-size:14px;color:#555;margin-bottom:8px">📊 估算首日破发概率</div>
+            <div style="font-size:48px;font-weight:800;color:${probability < 0.20 ? '#00c853' : probability < 0.35 ? '#ffab00' : '#dd2c00'}">${(probability*100).toFixed(1)}%</div>
+            <div style="font-size:13px;color:#888;margin-top:4px">评分 ${score.toFixed(0)} / 100</div>
+            <div style="font-size:11px;color:#aaa;margin-top:4px">成熟系数模型 · 数据截至 ${new Date().toLocaleDateString('zh-CN')}</div>
+        </td></tr>
+    `;
+
+    // 正面/负面因子摘要
+    if (protective.length > 0) {
+        html += `<tr style="background:#e8f5e9"><td colspan="4" style="padding:10px 12px;font-size:13px;color:#2e7d32">
+            <b>主要降低风险：</b>${protective.map(f => `${f.label} (${f.contribution.toFixed(2)})`).join('、')}
+        </td></tr>`;
+    }
+    if (risky.length > 0) {
+        html += `<tr style="background:#ffebee"><td colspan="4" style="padding:10px 12px;font-size:13px;color:#c62828">
+            <b>主要提高风险：</b>${risky.map(f => `${f.label} (+${f.contribution.toFixed(2)})`).join('、')}
+        </td></tr>`;
+    }
+
+    // 因子明细表（按贡献绝对值排序）
+    const ordered = [...features].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
+    const maxContrib = Math.max(...ordered.map(f => Math.abs(f.contribution)), 0.01);
+
+    for (const f of ordered) {
+        const isRisk = f.contribution > 0;
+        const width = Math.max(3, Math.abs(f.contribution) / maxContrib * 100);
+        const detail = f.value === null ? f.detail : f.detail;
+        html += `<tr>
+            <td>${f.label}</td>
+            <td style="width:35%"><div class="progress-bar"><div class="progress-fill" style="width:${width.toFixed(0)}%;background:${isRisk ? '#dd2c00' : '#00c853'}"></div></div></td>
+            <td class="score-cell" style="color:${isRisk ? '#c62828' : '#2e7d32'}">${f.contribution > 0 ? '+' : ''}${f.contribution.toFixed(2)}</td>
+            <td style="color:#888;font-size:12px">${detail}</td>
+        </tr>`;
+    }
+
+    html += `<tr style="background:#f8f9fa"><td colspan="4" style="padding:12px;font-size:12px;color:#888">
+        <div style="color:#c62828;font-size:11px;margin-bottom:4px">⚠️ ${riskNote}</div>
+        <div>该概率由成熟系数模型估算，基于市场Beta/折价率/波动率/A股走势等因子。结果仅用于研究，不构成投资建议。</div>
+    </td></tr>`;
+
+    document.getElementById('factorsBody').innerHTML = html;
+    document.getElementById('result').style.display = 'block';
+}
+
+function showError(msg) {
+    document.getElementById('error').innerHTML = `<div class="error">${msg}</div>`;
+}
+</script>
+</body>
+</html>
