@@ -1,0 +1,132 @@
+{
+  "update_time": "2026-08-03 10:08:31",
+  "source": "集思录 + 公开市场数据",
+  "data": {
+    "高盛": {
+      "tier": 1,
+      "break_rate": 0.08,
+      "avg_first_day": 0.15,
+      "total_count": 120,
+      "recent_break_rate": 0.1,
+      "score": -0.22,
+      "note": "头部外资，定价偏保守"
+    },
+    "摩根士丹利": {
+      "tier": 1,
+      "break_rate": 0.09,
+      "avg_first_day": 0.14,
+      "total_count": 95,
+      "recent_break_rate": 0.11,
+      "score": -0.21,
+      "note": "头部外资"
+    },
+    "中金": {
+      "tier": 1,
+      "break_rate": 0.22,
+      "avg_first_day": 0.06,
+      "total_count": 200,
+      "recent_break_rate": 0.25,
+      "score": 0.02,
+      "note": "项目多但近年破发率偏高"
+    },
+    "中信证券": {
+      "tier": 1,
+      "break_rate": 0.18,
+      "avg_first_day": 0.08,
+      "total_count": 150,
+      "recent_break_rate": 0.2,
+      "score": -0.05,
+      "note": "头部中资"
+    },
+    "华泰国际": {
+      "tier": 2,
+      "break_rate": 0.2,
+      "avg_first_day": 0.07,
+      "total_count": 80,
+      "recent_break_rate": 0.22,
+      "score": 0.03,
+      "note": ""
+    },
+    "海通国际": {
+      "tier": 2,
+      "break_rate": 0.21,
+      "avg_first_day": 0.06,
+      "total_count": 90,
+      "recent_break_rate": 0.23,
+      "score": 0.05,
+      "note": ""
+    },
+    "中信建投": {
+      "tier": 2,
+      "break_rate": 0.19,
+      "avg_first_day": 0.07,
+      "total_count": 100,
+      "recent_break_rate": 0.21,
+      "score": 0.0,
+      "note": ""
+    },
+    "国泰君安": {
+      "tier": 2,
+      "break_rate": 0.2,
+      "avg_first_day": 0.07,
+      "total_count": 85,
+      "recent_break_rate": 0.22,
+      "score": 0.02,
+      "note": ""
+    },
+    "招银国际": {
+      "tier": 3,
+      "break_rate": 0.25,
+      "avg_first_day": 0.04,
+      "total_count": 60,
+      "recent_break_rate": 0.28,
+      "score": 0.12,
+      "note": ""
+    },
+    "农银国际": {
+      "tier": 3,
+      "break_rate": 0.26,
+      "avg_first_day": 0.03,
+      "total_count": 50,
+      "recent_break_rate": 0.29,
+      "score": 0.14,
+      "note": ""
+    },
+    "工银国际": {
+      "tier": 3,
+      "break_rate": 0.24,
+      "avg_first_day": 0.04,
+      "total_count": 55,
+      "recent_break_rate": 0.27,
+      "score": 0.11,
+      "note": ""
+    },
+    "建银国际": {
+      "tier": 3,
+      "break_rate": 0.25,
+      "avg_first_day": 0.04,
+      "total_count": 52,
+      "recent_break_rate": 0.28,
+      "score": 0.13,
+      "note": ""
+    },
+    "其他中资": {
+      "tier": 3,
+      "break_rate": 0.3,
+      "avg_first_day": 0.02,
+      "total_count": 40,
+      "recent_break_rate": 0.33,
+      "score": 0.18,
+      "note": "泛指未列明的中资券商"
+    },
+    "小型券商": {
+      "tier": 4,
+      "break_rate": 0.35,
+      "avg_first_day": 0.0,
+      "total_count": 30,
+      "recent_break_rate": 0.38,
+      "score": 0.25,
+      "note": "项目少，质量参差"
+    }
+  }
+}

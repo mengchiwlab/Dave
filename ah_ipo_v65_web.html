@@ -604,7 +604,7 @@ function doScore() {
     const effectiveLabel = indChanged ? opt.dataset.label : autoInfo.label;
     const effectiveBase = indChanged ? parseInt(opt.value) : autoInfo.base;
 
-    // === V6.4 成熟系数模型 (动态数据增强版) ===
+    // === V6.5 成熟系数模型 (动态数据增强版) ===
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
     function sigmoid(z) { return 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, z)))); }
 
