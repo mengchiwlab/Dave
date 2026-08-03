@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📊 AH股IPO评分系统 V5.9</title>
+    <title>📊 AH股IPO评分系统 V6.0</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -141,100 +141,76 @@
             padding: 12px; border-radius: 8px;
             margin-top: 10px; font-size: 14px;
         }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+        .tag-new { background: #e3f2fd; color: #1565c0; }
+        .tag-hot { background: #fce4ec; color: #c62828; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 AH股IPO评分系统 V5.9</h1>
-            <p>基于50只历史AH股IPO回测优化 | 云端自动计算Beta/Alpha</p>
+            <h1>📊 AH股IPO评分系统 V6.4</h1>
+            <p>成熟系数模型 | 参考专业产品设计 | 仅供参考</p>
         </div>
         <div class="content">
             <div class="note">
-                💡 <strong>使用说明：</strong>输入A股6位代码，点击「获取数据」通过云端Worker自动计算Beta/Alpha/45日涨幅/价格位置。
-                然后输入AH折价率、基石占比等参数，点击「评分」。
-            </div>
-
-            <!-- 高级配置: 前后端分开部署时填写 -->
-            <div class="input-group full" style="margin-bottom:10px;opacity:0.7;">
-                <div class="field">
-                    <label>☁️ API地址 (默认同域名自动, 高级用户可改)</label>
-                    <input type="text" id="apiUrl" placeholder="默认: /api (同域名)" value="">
-                </div>
+                💡 输入A股6位代码（支持主板/创业板/科创板<b>688</b>），自动计算Beta/Alpha/45日涨幅/价格位置/个股波动率。<br>
+                <b>V6.2 修复</b>：市值单位修正、Alpha量纲统一、真正个股波动率（残差标准差）、100分归一化、输入校验、风险提示
             </div>
 
             <div class="input-group full">
                 <div class="field">
                     <label>A股代码 (6位数字)</label>
-                    <input type="text" id="code" placeholder="例如: 300308" maxlength="6">
+                    <input type="text" id="code" placeholder="例如: 300308, 688506" maxlength="6">
                 </div>
             </div>
             <button class="btn" id="fetchBtn" onclick="fetchData()">📡 获取A股数据</button>
 
             <div id="loading" class="loading" style="display:none;">
-                <div class="spinner"></div> 正在云端计算 Beta/Alpha/45日涨幅...
+                <div class="spinner"></div> 正在获取K线数据并计算指标...
             </div>
             <div id="error"></div>
 
             <div id="marketInfo" class="market-info" style="display:none;"></div>
 
             <div class="input-group" id="manualInputs" style="display:none;">
-                <div class="field">
-                    <label>AH折价率 (%)</label>
-                    <input type="number" id="discount" value="30" step="1">
+                <div class="field"><label>AH折价率 (%)</label><input type="number" id="discount" value="30" step="1"></div>
+                <div class="field"><label>基石占比 (%)</label><input type="number" id="cs" value="40" step="1"></div>
+                <div class="field full" style="grid-column:1/-1;">
+                    <label>基石投资者明细 <span class="tag tag-new">新增</span> <span id="csTotal" style="font-size:11px;color:#888;margin-left:8px;">已录入: 0%</span></label>
+                    <div id="csList" style="margin-top:4px;"></div>
+                    <button type="button" onclick="addCornerstoneItem()" style="margin-top:6px;padding:6px 12px;background:#e3f2fd;color:#1565c0;border:none;border-radius:6px;cursor:pointer;font-size:12px;">+ 添加基石投资者</button>
+                    <div style="font-size:11px;color:#888;margin-top:4px;">输入机构名称、认购占比、锁定期。支持模糊匹配(GIC/淡马锡/高瓴等)。留空则仅用上方占比。</div>
                 </div>
-                <div class="field">
-                    <label>基石占比 (%)</label>
-                    <input type="number" id="cs" value="40" step="1">
-                </div>
-                <div class="field">
-                    <label>保荐人</label>
+                <div class="field"><label>保荐人 <span class="tag tag-new">动态</span></label>
                     <select id="sp">
-                        <option value="3">高盛</option>
-                        <option value="3">摩根士丹利</option>
-                        <option value="3" selected>中金</option>
-                        <option value="3">中信证券</option>
-                        <option value="2">华泰</option>
-                        <option value="2">海通</option>
-                        <option value="1.5">中信建投</option>
-                        <option value="1.5">国泰君安</option>
-                        <option value="1">招银</option>
-                        <option value="1">农银</option>
-                        <option value="1">其他中资</option>
-                        <option value="0.5">小型券商</option>
+                        <option value="" selected>加载中...</option>
                     </select>
                 </div>
-                <div class="field">
-                    <label>行业</label>
+                <div class="field"><label>行业 <span class="tag tag-hot">影响Beta权重</span></label>
                     <select id="ind">
-                        <option value="5" selected>半导体/芯片/AI</option>
-                        <option value="4">新能源/光伏/储能</option>
-                        <option value="4">云计算/软件/通信</option>
-                        <option value="4">机器人/精密制造</option>
-                        <option value="4">创新药/医疗器械</option>
-                        <option value="3">新材料/军工</option>
-                        <option value="2">食品饮料/消费</option>
-                        <option value="2">医药</option>
-                        <option value="1">银行/保险/地产</option>
-                        <option value="1">化工/钢铁/纺织</option>
+                        <option value="5" data-weight="1.3" data-label="半导体" selected>半导体/芯片/AI</option>
+                        <option value="4" data-weight="1.2" data-label="新能源">新能源/光伏/储能</option>
+                        <option value="4" data-weight="1.2" data-label="科技制造">云计算/软件/通信</option>
+                        <option value="4" data-weight="1.1" data-label="制造">机器人/精密制造</option>
+                        <option value="4" data-weight="1.0" data-label="医药">创新药/医疗器械</option>
+                        <option value="3" data-weight="1.0" data-label="新材料军工">新材料/军工</option>
+                        <option value="2" data-weight="0.8" data-label="消费">食品饮料/消费</option>
+                        <option value="1" data-weight="0.7" data-label="金融地产">银行/保险/地产</option>
+                        <option value="1" data-weight="0.7" data-label="周期">化工/钢铁/纺织</option>
                     </select>
                 </div>
-                <div class="field">
-                    <label>Beta (云端计算)</label>
-                    <input type="number" id="beta" step="0.01" readonly>
-                </div>
-                <div class="field">
-                    <label>Alpha (云端计算)</label>
-                    <input type="number" id="alpha" step="0.01" readonly>
-                </div>
-                <div class="field">
-                    <label>A股45日涨幅% (云端计算)</label>
-                    <input type="number" id="ret45" step="0.01" readonly>
-                </div>
-                <div class="field">
-                    <label>价格位置 (云端计算)</label>
-                    <input type="number" id="pos" step="0.0001" readonly>
-                </div>
+                <div class="field"><label>Beta (自动计算)</label><input type="number" id="beta" step="0.01" readonly></div>
+                <div class="field"><label>Alpha (自动计算)</label><input type="number" id="alpha" step="0.01" readonly></div>
+                <div class="field"><label>A股45日涨幅% (自动计算)</label><input type="number" id="ret45" step="0.01" readonly></div>
+                <div class="field"><label>价格位置 (自动计算)</label><input type="number" id="pos" step="0.0001" readonly></div>
             </div>
 
             <button class="btn" id="scoreBtn" onclick="doScore()" style="display:none;">🚀 开始评分</button>
@@ -255,12 +231,219 @@
     </div>
 
 <script>
+// ========== 全局数据存储 ==========
 let stockData = {};
+let sponsorData = {};      // 从 sponsors.json 加载
+let cornerstoneRules = {}; // 从 cornerstone_rules.json 加载
+let cornerstoneList = [];  // 用户输入的基石明细 [{name, ratio, lockup}]
 
-// ========== 配置 ==========
-// Vercel部署: 前后端同域名, 直接用相对路径
-// 如果单独部署前端到GitHub Pages, 需要填Worker地址
-const DEFAULT_API_URL = "/api";
+// ========== 加载外部数据 ==========
+async function loadExternalData() {
+    try {
+        const [sRes, cRes] = await Promise.all([
+            fetch('sponsors.json').catch(() => null),
+            fetch('cornerstone_rules.json').catch(() => null)
+        ]);
+        if (sRes && sRes.ok) {
+            const sJson = await sRes.json();
+            sponsorData = sJson.data || {};
+            console.log('[DATA] 加载保荐人数据:', Object.keys(sponsorData).length, '个');
+        }
+        if (cRes && cRes.ok) {
+            const cJson = await cRes.json();
+            cornerstoneRules = cJson.rules || {};
+            console.log('[DATA] 加载基石规则');
+        }
+    } catch (e) {
+        console.warn('[DATA] 加载外部数据失败，使用内置默认值:', e.message);
+    }
+    // 保底：如果加载失败，使用内置默认
+    if (!sponsorData || Object.keys(sponsorData).length === 0) {
+        sponsorData = getDefaultSponsors();
+    }
+    if (!cornerstoneRules || Object.keys(cornerstoneRules).length === 0) {
+        cornerstoneRules = getDefaultCornerstoneRules();
+    }
+    initSponsorSelect();
+}
+
+function getDefaultSponsors() {
+    return {
+        "高盛": { tier: 1, break_rate: 0.08, score: -0.22, note: "头部外资" },
+        "摩根士丹利": { tier: 1, break_rate: 0.09, score: -0.21, note: "头部外资" },
+        "中金": { tier: 1, break_rate: 0.22, score: 0.02, note: "项目多但近年破发率偏高" },
+        "中信证券": { tier: 1, break_rate: 0.18, score: -0.05, note: "头部中资" },
+        "华泰国际": { tier: 2, break_rate: 0.20, score: 0.03, note: "" },
+        "海通国际": { tier: 2, break_rate: 0.21, score: 0.05, note: "" },
+        "中信建投": { tier: 2, break_rate: 0.19, score: 0.00, note: "" },
+        "国泰君安": { tier: 2, break_rate: 0.20, score: 0.02, note: "" },
+        "招银国际": { tier: 3, break_rate: 0.25, score: 0.12, note: "" },
+        "农银国际": { tier: 3, break_rate: 0.26, score: 0.14, note: "" },
+        "工银国际": { tier: 3, break_rate: 0.24, score: 0.11, note: "" },
+        "建银国际": { tier: 3, break_rate: 0.25, score: 0.13, note: "" },
+        "其他中资": { tier: 3, break_rate: 0.30, score: 0.18, note: "泛指未列明的中资券商" },
+        "小型券商": { tier: 4, break_rate: 0.35, score: 0.25, note: "项目少，质量参差" }
+    };
+}
+
+function getDefaultCornerstoneRules() {
+    return {
+        institution_tiers: {
+            "GIC": { tier: 1, weight: 1.0 },
+            "淡马锡": { tier: 1, weight: 1.0 },
+            "富达": { tier: 2, weight: 0.85 },
+            "高瓴": { tier: 2, weight: 0.80 },
+            "腾讯": { tier: 3, weight: 0.75 },
+            "阿里": { tier: 3, weight: 0.75 },
+            "基石": { tier: 4, weight: 0.50 },
+            "投资": { tier: 4, weight: 0.45 },
+            "个人": { tier: 5, weight: 0.15 }
+        },
+        lockup_weights: { 0: 0.6, 6: 0.9, 12: 1.0, 18: 1.05, 24: 1.1 }
+    };
+}
+
+// 动态生成保荐人下拉框
+function initSponsorSelect() {
+    const sp = document.getElementById('sp');
+    sp.innerHTML = '';
+    const tiers = { 1: '★★★ 头部', 2: '★★ 腰部', 3: '★ 一般', 4: '⚠ 小型' };
+    for (const [name, info] of Object.entries(sponsorData)) {
+        const opt = document.createElement('option');
+        opt.value = info.score;
+        const br = (info.break_rate * 100).toFixed(0);
+        opt.textContent = `${name} (${tiers[info.tier] || ''}, 破发率${br}%)`;
+        if (name === '中金') opt.selected = true;
+        sp.appendChild(opt);
+    }
+}
+
+// 匹配机构名称返回权重
+function matchInstitutionWeight(name) {
+    const tiers = cornerstoneRules.institution_tiers || {};
+    // 优先精确匹配
+    if (tiers[name]) return tiers[name].weight;
+    // 模糊匹配
+    for (const [key, info] of Object.entries(tiers)) {
+        if (name.includes(key) || key.includes(name)) return info.weight;
+    }
+    return 0.40; // 默认一般机构
+}
+
+// 计算基石质量加权分
+function calcCornerstoneQuality() {
+    if (cornerstoneList.length === 0) {
+        // 没有明细，返回原始占比的线性映射
+        const cs = parseFloat(document.getElementById('cs').value) || 0;
+        return { qualityScore: cs / 100, detail: '仅输入占比，无明细' };
+    }
+    let totalWeight = 0, totalRatio = 0;
+    const details = [];
+    const lockupMap = cornerstoneRules.lockup_weights || { 0: 0.6, 6: 0.9, 12: 1.0, 18: 1.05, 24: 1.1 };
+    for (const item of cornerstoneList) {
+        const w = matchInstitutionWeight(item.name);
+        const lw = lockupMap[item.lockup] || 0.9;
+        const contrib = (item.ratio / 100) * w * lw;
+        totalWeight += contrib;
+        totalRatio += item.ratio;
+        details.push(`${item.name}(${item.ratio}%,${item.lockup}月,w=${w.toFixed(2)})`);
+    }
+    return { qualityScore: totalWeight, detail: details.join('; ') };
+}
+
+// 添加基石条目UI
+function addCornerstoneItem(name = '', ratio = '', lockup = 12) {
+    const container = document.getElementById('csList');
+    const div = document.createElement('div');
+    div.className = 'cs-item';
+    div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;align-items:center;';
+    div.innerHTML = `
+        <input type="text" placeholder="机构名称" class="cs-name" value="${name}" style="flex:2;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+        <input type="number" placeholder="占比%" class="cs-ratio" value="${ratio}" min="0" max="100" style="width:70px;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+        <select class="cs-lockup" style="width:80px;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="0">无锁定</option>
+            <option value="6">6个月</option>
+            <option value="12" selected>12个月</option>
+            <option value="18">18个月</option>
+            <option value="24">24个月+</option>
+        </select>
+        <button type="button" onclick="this.parentElement.remove();updateCornerstoneList();" style="padding:6px 10px;background:#ffebee;color:#c62828;border:none;border-radius:6px;cursor:pointer;font-size:12px;">✕</button>
+    `;
+    container.appendChild(div);
+    // 绑定输入事件
+    div.querySelectorAll('input, select').forEach(el => {
+        el.addEventListener('change', updateCornerstoneList);
+        el.addEventListener('input', updateCornerstoneList);
+    });
+    updateCornerstoneList();
+}
+
+function updateCornerstoneList() {
+    cornerstoneList = [];
+    document.querySelectorAll('.cs-item').forEach(div => {
+        const name = div.querySelector('.cs-name').value.trim();
+        const ratio = parseFloat(div.querySelector('.cs-ratio').value) || 0;
+        const lockup = parseInt(div.querySelector('.cs-lockup').value) || 12;
+        if (name && ratio > 0) cornerstoneList.push({ name, ratio, lockup });
+    });
+    // 更新总占比显示
+    const total = cornerstoneList.reduce((s, i) => s + i.ratio, 0);
+    document.getElementById('csTotal').textContent = `已录入: ${total.toFixed(1)}%`;
+}
+
+// 页面加载时初始化
+loadExternalData();
+
+// ========== 腾讯K线API ==========
+async function fetchKlines(code) {
+    const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
+    const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tcode},day,,,120,qfq`;
+    const res = await fetch(url);
+    const json = await res.json();
+
+    const data = json.data && json.data[tcode];
+    if (!data) throw new Error('无法获取K线数据');
+
+    const klines = data.qfqday || data.day;
+    if (!klines || klines.length === 0) throw new Error('K线数据为空');
+
+    return klines.map(d => ({
+        date: d[0].replace(/-/g, ''),
+        open: +d[1],
+        close: +d[2],
+        low: +d[3],
+        high: +d[4],
+    }));
+}
+
+async function fetchBenchKlines() {
+    const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000300,day,,,120,qfq`;
+    const res = await fetch(url);
+    const json = await res.json();
+
+    const data = json.data && json.data['sh000300'];
+    const klines = data && (data.qfqday || data.day);
+    if (!klines) throw new Error('无法获取沪深300数据');
+
+    return klines.map(d => ({
+        date: d[0].replace(/-/g, ''),
+        close: +d[2],
+    }));
+}
+
+async function fetchStockInfo(code) {
+    const tcode = code.startsWith('6') ? `sh${code}` : `sz${code}`;
+    const res = await fetch(`https://qt.gtimg.cn/q=${tcode}`);
+    const text = await res.text();
+    const m = text.match(/v_[^=]+="([^"]+)"/);
+    if (!m) return { name: code, cap: null };
+
+    const parts = m[1].split('~');
+    return {
+        name: parts[1] || code,
+        cap: parts[44] ? parseFloat(parts[44]) : null,  // 腾讯API返回的市值已经是亿元
+    };
+}
 
 async function fetchData() {
     const code = document.getElementById('code').value.trim();
@@ -269,36 +452,59 @@ async function fetchData() {
         return;
     }
 
-    let apiUrl = document.getElementById('apiUrl').value.trim();
-    if (!apiUrl) apiUrl = DEFAULT_API_URL;
-
     document.getElementById('fetchBtn').disabled = true;
     document.getElementById('loading').style.display = 'block';
     document.getElementById('error').innerHTML = '';
 
     try {
-        const res = await fetch(`${apiUrl}?code=${code}`);
-        const data = await res.json();
+        const [klines, benchKlines, info] = await Promise.all([
+            fetchKlines(code),
+            fetchBenchKlines(),
+            fetchStockInfo(code),
+        ]);
 
-        if (data.error) {
-            throw new Error(data.error);
+        if (klines.length < 45) throw new Error('K线数据不足45天');
+
+        const stockMap = new Map(klines.map(d => [d.date, d]));
+        const benchMap = new Map(benchKlines.map(d => [d.date, d]));
+        const dates = klines.map(d => d.date).filter(d => benchMap.has(d));
+        dates.sort();
+
+        const stockAligned = dates.map(d => stockMap.get(d));
+        const benchAligned = dates.map(d => benchMap.get(d));
+        const closes = stockAligned.map(d => d.close);
+        const benchCloses = benchAligned.map(d => d.close);
+
+        const ret45 = closes.length >= 46
+            ? (closes[closes.length - 1] - closes[closes.length - 46]) / closes[closes.length - 46] * 100
+            : (closes[closes.length - 1] - closes[0]) / closes[0] * 100;
+
+        const high120 = Math.max(...closes);
+        const low120 = Math.min(...closes);
+        const pos = high120 > low120 ? (closes[closes.length - 1] - low120) / (high120 - low120) : 0.5;
+
+        const stockR = [], benchR = [];
+        for (let i = 1; i < stockAligned.length; i++) {
+            stockR.push((closes[i] - closes[i-1]) / closes[i-1]);
+            benchR.push((benchCloses[i] - benchCloses[i-1]) / benchCloses[i-1]);
         }
+        const beta = calcBeta(stockR, benchR);
+        const alpha = calcAlpha(stockR, benchR, beta);
+        const idioVol = calcIdioVol(stockR, benchR, beta); // 真正个股波动率（残差标准差）
 
-        stockData = data;
+        const indInfo = getIndustryInfo(info.name);
+        stockData = { code, name: info.name, ret45, pos, beta, alpha, idioVol, cap: info.cap, indInfo };
 
-        // 填充表单
-        document.getElementById('beta').value = data.beta.toFixed(2);
-        document.getElementById('alpha').value = data.alpha.toFixed(2);
-        document.getElementById('ret45').value = data.ret45.toFixed(2);
-        document.getElementById('pos').value = data.pos.toFixed(4);
+        document.getElementById('beta').value = beta.toFixed(2);
+        document.getElementById('alpha').value = alpha.toFixed(4);
+        document.getElementById('ret45').value = ret45.toFixed(2);
+        document.getElementById('pos').value = pos.toFixed(4);
 
-        // 显示市场信息
-        const capStr = data.cap ? `${data.cap.toFixed(0)}亿` : 'N/A';
-        const info = `📈 ${data.name} (${data.code}) | Alpha=${(data.alpha*100).toFixed(1)}% | Beta=${data.beta.toFixed(2)} | 45日=${data.ret45.toFixed(1)}% | 位置=${(data.pos*100).toFixed(0)}% | 市值=${capStr}`;
-        document.getElementById('marketInfo').innerHTML = info;
+        const capStr = info.cap ? `${info.cap.toFixed(0)}亿` : 'N/A';
+        document.getElementById('marketInfo').innerHTML =
+            `📈 ${info.name} (${code}) | α=${(alpha*100).toFixed(1)}% | β=${beta.toFixed(2)} | 45日=${ret45.toFixed(1)}% | 位置=${(pos*100).toFixed(0)}% | 市值=${capStr} | 波动=${(idioVol*100).toFixed(1)}% | 行业=${indInfo.label}`;
         document.getElementById('marketInfo').style.display = 'block';
 
-        // 显示手动输入区
         document.getElementById('manualInputs').style.display = 'grid';
         document.getElementById('scoreBtn').style.display = 'block';
 
@@ -310,67 +516,235 @@ async function fetchData() {
     }
 }
 
-function doScore() {
-    if (!stockData.code) {
-        showError('请先获取数据');
-        return;
+function calcBeta(sr, br) {
+    const n = sr.length;
+    if (n < 2) return 1;
+    const ms = sr.reduce((a,b) => a+b, 0) / n;
+    const mb = br.reduce((a,b) => a+b, 0) / n;
+    let cov = 0, vr = 0;
+    for (let i = 0; i < n; i++) {
+        cov += (sr[i] - ms) * (br[i] - mb);
+        vr += (br[i] - mb) ** 2;
     }
+    return vr > 0 ? (cov/n) / (vr/n) : 1;
+}
 
-    const r = stockData.ret45;
-    const b = stockData.beta;
-    const p = stockData.pos;
+function calcAlpha(sr, br, beta) {
+    const n = sr.length;
+    if (n < 2) return 0;
+    const ms = sr.reduce((a,b) => a+b, 0) / n;
+    const mb = br.reduce((a,b) => a+b, 0) / n;
+    return (ms - beta * mb) * 252;
+}
+
+// 计算个股波动率（残差标准差，年化）- 真正衡量个股特有波动
+function calcIdioVol(sr, br, beta) {
+    const n = sr.length;
+    if (n < 2) return 0;
+    // 残差收益率 = 个股收益 - Beta × 市场收益
+    const residuals = [];
+    for (let i = 0; i < n; i++) {
+        residuals.push(sr[i] - beta * br[i]);
+    }
+    const m = residuals.reduce((a,b) => a+b, 0) / n;
+    const variance = residuals.reduce((sum, r) => sum + (r - m) ** 2, 0) / n;
+    return Math.sqrt(variance) * Math.sqrt(252); // 年化
+}
+
+// ========== V6.0 平滑评分 ==========
+function smoothScore(value, thresholds, scores) {
+    if (value <= thresholds[0]) return scores[0];
+    if (value >= thresholds[thresholds.length - 1]) return scores[scores.length - 1];
+    for (let i = 0; i < thresholds.length - 1; i++) {
+        if (thresholds[i] <= value && value <= thresholds[i + 1]) {
+            const t = (value - thresholds[i]) / (thresholds[i + 1] - thresholds[i]);
+            return scores[i] + t * (scores[i + 1] - scores[i]);
+        }
+    }
+    return scores[scores.length - 1];
+}
+
+// ========== 行业映射 + Beta权重 ==========
+function getIndustryInfo(name) {
+    const patterns = {
+        "半导体|芯片|集成|微装|澜起|兆易|纳芯|豪威|国民|芯基|芯碁|峰岹": { label: "半导体", weight: 1.3, base: 5 },
+        "新能源|光伏|储能|宁德|钧达|大金重工|天岳|先导": { label: "新能源", weight: 1.2, base: 4 },
+        "软件|通信|科技|剑桥|广和通|美格智能|龙旗|华勤|立讯|蓝思|三一|大族": { label: "科技制造", weight: 1.2, base: 4 },
+        "机器人|精密|制造|埃斯顿|兆威|三环|鼎泰|广合|胜宏|牧原": { label: "制造", weight: 1.1, base: 4 },
+        "医药|医疗|生物|恒瑞|可孚|迈威": { label: "医药", weight: 1.0, base: 4 },
+        "新材料|军工|国恩|沃尔|吉宏|赤峰": { label: "新材料军工", weight: 1.0, base: 3 },
+        "饮料|食品|消费|安井|东鹏|海天": { label: "消费", weight: 0.8, base: 2 },
+        "银行|保险|地产|期货": { label: "金融地产", weight: 0.7, base: 1 },
+        "化工|钢铁|纺织|滨化": { label: "周期", weight: 0.7, base: 1 },
+    };
+    for (const [p, info] of Object.entries(patterns)) {
+        if (p.split("|").some(k => name.includes(k))) return info;
+    }
+    return { label: "其他", weight: 1.0, base: 2 };
+}
+
+function doScore() {
+    if (!stockData.code) { showError('请先获取数据'); return; }
+
+    const disc = parseFloat(document.getElementById('discount').value);
+    const cs = parseFloat(document.getElementById('cs').value);
+    const sp = parseFloat(document.getElementById('sp').value);
+    if (isNaN(disc) || disc < 0 || disc > 100) { showError('AH折价率必须在 0-100% 之间'); return; }
+    if (isNaN(cs) || cs < 0 || cs > 100) { showError('基石占比必须在 0-100% 之间'); return; }
+
+    const r = stockData.ret45, b = stockData.beta, p = stockData.pos;
     const a = stockData.alpha;
-    const disc = parseFloat(document.getElementById('discount').value) || 0;
-    const cs = parseFloat(document.getElementById('cs').value) || 0;
-    const sp = parseFloat(document.getElementById('sp').value) || 1;
-    const ind = parseFloat(document.getElementById('ind').value) || 2;
+    const vol = stockData.idioVol;
     const cap = stockData.cap || 0;
 
-    const s_ret = r > 15 ? 17 : r > 5 ? 14 : r > -5 ? 10 : r > -15 ? 6 : 3;
-    const s_beta = b > 2 ? 21 : b > 1.5 ? 16 : b > 1 ? 11 : b > 0.5 ? 6 : 3;
-    const s_cs = cs > 50 ? 15 : cs > 40 ? 12 : cs > 30 ? 8 : 4;
-    const s_pos = p > 0.8 ? 10 : p > 0.6 ? 8 : p > 0.4 ? 6 : p > 0.2 ? 3 : 1;
-    const s_alpha = a > 1 ? 2 : a > 0.5 ? 1.5 : a > 0 ? 1 : a > -0.5 ? 0.5 : 0;
-    const s_disc = disc > 50 ? 9 : disc > 40 ? 7 : disc > 30 ? 5 : disc > 20 ? 2 : 1;
-    const s_ind = ind * 3.4;
-    const s_cap = cap < 200 ? 4 : cap < 1000 ? 3 : cap < 5000 ? 2 : 1;
-    const s_sp = sp * 1.67;
+    const indSelect = document.getElementById('ind');
+    const opt = indSelect.options[indSelect.selectedIndex];
+    const autoInfo = stockData.indInfo || { label: "其他", weight: 1.0, base: 2 };
+    const indChanged = indSelect.selectedIndex !== 0;
+    const effectiveLabel = indChanged ? opt.dataset.label : autoInfo.label;
+    const effectiveBase = indChanged ? parseInt(opt.value) : autoInfo.base;
 
-    const total = s_ret + s_beta + s_cs + s_pos + s_alpha + s_disc + s_ind + s_cap + s_sp;
+    // === V6.5 成熟系数模型 (动态数据增强版) ===
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function sigmoid(z) { return 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, z)))); }
 
-    let grade, advice, boxClass;
-    if (total >= 80) { grade = 'A'; advice = '强烈推荐参与'; boxClass = 'grade-a'; }
-    else if (total >= 65) { grade = 'B+'; advice = '推荐参与'; boxClass = 'grade-bp'; }
-    else if (total >= 50) { grade = 'B'; advice = '中性偏积极'; boxClass = 'grade-b'; }
-    else if (total >= 40) { grade = 'C'; advice = '观望'; boxClass = 'grade-c'; }
-    else { grade = 'D'; advice = '建议回避'; boxClass = 'grade-d'; }
-
-    const factors = [
-        { name: 'A股涨跌幅', score: s_ret, max: 17, detail: `45日: ${r.toFixed(1)}%`, color: '#00c853' },
-        { name: 'Beta(波动)', score: s_beta, max: 21, detail: `β=${b.toFixed(2)}`, color: b > 2 ? '#dd2c00' : '#64dd17' },
-        { name: '基石占比', score: s_cs, max: 15, detail: `${cs.toFixed(1)}%`, color: '#00c853' },
-        { name: '价格位置', score: s_pos, max: 10, detail: `分位: ${(p*100).toFixed(0)}%`, color: '#64dd17' },
-        { name: 'Alpha', score: s_alpha, max: 2, detail: `α=${(a*100).toFixed(1)}%`, color: '#00c853' },
-        { name: 'AH折价率', score: s_disc, max: 9, detail: `${disc.toFixed(1)}%`, color: disc > 40 ? '#00c853' : '#ffab00' },
-        { name: '行业', score: s_ind, max: 17, detail: '', color: '#00c853' },
-        { name: '市值规模', score: s_cap, max: 4, detail: `${cap.toFixed(0)}亿`, color: '#64dd17' },
-        { name: '保荐人', score: s_sp, max: 5, detail: '', color: '#64dd17' },
+    const definitions = [
+        { key: 'discount', label: 'AH折价率', coef: -0.42, trans: v => (v - 20) / 15, fmt: v => `${v.toFixed(1)}%` },
+        { key: 'ret45', label: 'A股45日走势', coef: -0.31, trans: v => v / 15, fmt: v => `${v.toFixed(1)}%` },
+        { key: 'volatility', label: '残差年化波动率', coef: 0.34, trans: v => (v - 30) / 15, fmt: v => `${v.toFixed(1)}%` },
+        { key: 'beta', label: '市场Beta', coef: 0.18, trans: v => v - 1, fmt: v => v.toFixed(2) },
+        { key: 'position', label: 'A股价格位置', coef: 0.17, trans: v => (v*100 - 50) / 30, fmt: v => `${(v*100).toFixed(1)}%` },
+        { key: 'alpha', label: '年化Alpha', coef: -0.10, trans: v => v*100 / 12, fmt: v => `${(v*100).toFixed(1)}%` },
     ];
 
+    const values = {
+        ret45: r, position: p, beta: b, volatility: vol*100,
+        alpha: a, discount: disc,
+    };
+
+    let logit = -0.18;
+    const features = [];
+
+    for (const def of definitions) {
+        const v = values[def.key];
+        if (v === null || !Number.isFinite(v)) continue;
+        const t = clamp(def.trans(v), -2.5, 2.5);
+        const contrib = def.coef * t;
+        logit += contrib;
+        features.push({
+            label: def.label, contribution: contrib, value: v,
+            detail: def.fmt(v), coef: def.coef
+        });
+    }
+
+    // === 基石质量加权因子 (V6.5 新增) ===
+    const csQuality = calcCornerstoneQuality();
+    const csScore = -0.24 * clamp((csQuality.qualityScore * 100 - 25) / 20, -2.5, 2.5);
+    logit += csScore;
+    features.push({
+        label: '基石质量加权',
+        contribution: csScore,
+        value: csQuality.qualityScore,
+        detail: `加权质量分=${(csQuality.qualityScore * 100).toFixed(1)}%; ${csQuality.detail}`,
+        coef: -0.24
+    });
+
+    // === 保荐人动态因子 (V6.5 替换静态分类) ===
+    const spSelect = document.getElementById('sp');
+    const spName = spSelect.options[spSelect.selectedIndex]?.text.split('(')[0].trim() || '中金';
+    const spInfo = sponsorData[spName] || sponsorData['中金'];
+    // 使用数据文件中的 score，但基于 break_rate 做动态微调
+    const spBreakRate = spInfo.break_rate || 0.20;
+    const spBaseScore = spInfo.score || 0;
+    // 相对于市场平均破发率(~25%)的偏离
+    const spRelative = (spBreakRate - 0.25) / 0.15; // 负值=优于市场
+    const spContrib = clamp(spBaseScore + 0.10 * spRelative, -0.30, 0.30);
+    logit += spContrib;
+    features.push({
+        label: '保荐人历史风险',
+        contribution: spContrib,
+        value: spBreakRate,
+        detail: `${spName} | 历史破发率${(spBreakRate*100).toFixed(0)}% | ${spInfo.note || ''}`,
+        coef: null
+    });
+
+    // 行业
+    const industryMap = { 5: -0.30, 4: -0.15, 3: 0.10, 2: 0.25, 1: 0.40 };
+    const indContrib = industryMap[effectiveBase] || 0.20;
+    logit += indContrib;
+    features.push({ label: '行业历史风险', contribution: indContrib, value: null, detail: effectiveLabel });
+
+    const rawProb = sigmoid(logit);
+    const probability = Math.max(0.03, Math.min(0.92, rawProb));
+    const score = 100 * (1 - probability);
+
+    let grade, advice, boxClass, riskNote;
+    if (probability < 0.10) {
+        grade = 'A'; advice = '模型预测破发风险很低'; boxClass = 'grade-a'; riskNote = '多数保护性因子占优，但仍需独立判断';
+    } else if (probability < 0.20) {
+        grade = 'B+'; advice = '模型预测破发风险较低'; boxClass = 'grade-bp'; riskNote = '保护性因子较好，注意市场波动';
+    } else if (probability < 0.35) {
+        grade = 'B'; advice = '模型预测存在一定破发风险'; boxClass = 'grade-b'; riskNote = '多空因子交织，需结合更多信息';
+    } else if (probability < 0.50) {
+        grade = 'C'; advice = '模型预测破发风险偏高'; boxClass = 'grade-c'; riskNote = '风险因子占优，建议谨慎';
+    } else {
+        grade = 'D'; advice = '模型预测破发风险较高'; boxClass = 'grade-d'; riskNote = '多项风险因子显著，建议回避或极小仓位';
+    }
+
+    // 分类正面/负面因子
+    const protective = features.filter(f => f.contribution < 0).sort((a, b) => a.contribution - b.contribution).slice(0, 3);
+    const risky = features.filter(f => f.contribution > 0).sort((a, b) => b.contribution - a.contribution).slice(0, 3);
+
     document.getElementById('resName').textContent = `${stockData.name} (${stockData.code})`;
-    document.getElementById('resScore').textContent = total.toFixed(1);
+    document.getElementById('resScore').textContent = score.toFixed(0);
     document.getElementById('resGrade').textContent = `等级 ${grade}`;
     document.getElementById('resAdvice').textContent = advice;
+    document.getElementById('scoreBox').className = 'score-box ' + boxClass;
 
-    const box = document.getElementById('scoreBox');
-    box.className = 'score-box ' + boxClass;
+    // 顶部概率展示
+    let html = `
+        <tr style="background:#f0f7ff"><td colspan="4" style="padding:16px;text-align:center">
+            <div style="font-size:14px;color:#555;margin-bottom:8px">📊 估算首日破发概率</div>
+            <div style="font-size:48px;font-weight:800;color:${probability < 0.20 ? '#00c853' : probability < 0.35 ? '#ffab00' : '#dd2c00'}">${(probability*100).toFixed(1)}%</div>
+            <div style="font-size:13px;color:#888;margin-top:4px">评分 ${score.toFixed(0)} / 100</div>
+            <div style="font-size:11px;color:#aaa;margin-top:4px">成熟系数模型 · 数据截至 ${new Date().toLocaleDateString('zh-CN')}</div>
+        </td></tr>
+    `;
 
-    const tbody = document.getElementById('factorsBody');
-    tbody.innerHTML = factors.map(f => {
-        const pct = (f.score / f.max * 100).toFixed(0);
-        return `<tr><td>${f.name}</td><td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${f.color}"></div></div></td><td class="score-cell">${f.score.toFixed(1)}/${f.max}</td><td style="color:#888;font-size:12px">${f.detail}</td></tr>`;
-    }).join('');
+    // 正面/负面因子摘要
+    if (protective.length > 0) {
+        html += `<tr style="background:#e8f5e9"><td colspan="4" style="padding:10px 12px;font-size:13px;color:#2e7d32">
+            <b>主要降低风险：</b>${protective.map(f => `${f.label} (${f.contribution.toFixed(2)})`).join('、')}
+        </td></tr>`;
+    }
+    if (risky.length > 0) {
+        html += `<tr style="background:#ffebee"><td colspan="4" style="padding:10px 12px;font-size:13px;color:#c62828">
+            <b>主要提高风险：</b>${risky.map(f => `${f.label} (+${f.contribution.toFixed(2)})`).join('、')}
+        </td></tr>`;
+    }
 
+    // 因子明细表（按贡献绝对值排序）
+    const ordered = [...features].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
+    const maxContrib = Math.max(...ordered.map(f => Math.abs(f.contribution)), 0.01);
+
+    for (const f of ordered) {
+        const isRisk = f.contribution > 0;
+        const width = Math.max(3, Math.abs(f.contribution) / maxContrib * 100);
+        const detail = f.value === null ? f.detail : f.detail;
+        html += `<tr>
+            <td>${f.label}</td>
+            <td style="width:35%"><div class="progress-bar"><div class="progress-fill" style="width:${width.toFixed(0)}%;background:${isRisk ? '#dd2c00' : '#00c853'}"></div></div></td>
+            <td class="score-cell" style="color:${isRisk ? '#c62828' : '#2e7d32'}">${f.contribution > 0 ? '+' : ''}${f.contribution.toFixed(2)}</td>
+            <td style="color:#888;font-size:12px">${detail}</td>
+        </tr>`;
+    }
+
+    html += `<tr style="background:#f8f9fa"><td colspan="4" style="padding:12px;font-size:12px;color:#888">
+        <div style="color:#c62828;font-size:11px;margin-bottom:4px">⚠️ ${riskNote}</div>
+        <div>该概率由成熟系数模型估算，基于市场Beta/折价率/波动率/A股走势等因子。结果仅用于研究，不构成投资建议。</div>
+    </td></tr>`;
+
+    document.getElementById('factorsBody').innerHTML = html;
     document.getElementById('result').style.display = 'block';
 }
 
